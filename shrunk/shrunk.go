@@ -40,8 +40,8 @@ func NewShrunker(cfg *Config) *Shrunker {
 	return &Shrunker{
 		verboseOutput:   cfg.VerboseOutput,
 		checkPath:       checkPath,
-		shrunkDirNames:  sliceToMap(cfg.RemoveDirNames),
-		shrunkFileNames: sliceToMap(cfg.RemoveFileNames),
+		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames),
+		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames),
 		removeCh:        make(chan *removeObjInfo),
 		statsCh:         make(chan dirStats),
 		concurentLimit:  concurentLimit,

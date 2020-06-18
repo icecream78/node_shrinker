@@ -39,17 +39,10 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := shrunk.NewShrunker(&shrunk.Config{
-			CheckPath: checkPath,
-			RemoveDirNames: []string{
-				"test",
-				"tests",
-				"example",
-				"examples",
-			},
-			RemoveFileNames: []string{
-				"package.json",
-			},
-			VerboseOutput: verbose,
+			CheckPath:       checkPath,
+			RemoveDirNames:  []string{},
+			RemoveFileNames: []string{},
+			VerboseOutput:   verbose,
 		}).Start()
 		if err != nil {
 			fmt.Printf("Someghing broken=) %v\n", err)

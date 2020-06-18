@@ -2,10 +2,13 @@ package shrunk
 
 import "os"
 
-func sliceToMap(sl []string) map[string]struct{} {
+func sliceToMap(sl ...[]string) map[string]struct{} {
 	m := make(map[string]struct{})
 	for i := 0; i < len(sl); i++ {
-		m[sl[i]] = struct{}{}
+		tmp := sl[i]
+		for j := 0; j < len(tmp); j++ {
+			m[tmp[j]] = struct{}{}
+		}
 	}
 	return m
 }
