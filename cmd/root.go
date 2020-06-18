@@ -22,12 +22,10 @@ import (
 	"github.com/icecream78/node_shrunker/shrunk"
 
 	"github.com/spf13/cobra"
-
-	homedir "github.com/mitchellh/go-homedir"
-	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var checkPath string
+var verbose bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -40,20 +38,25 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		shrunk.NewShrunker(&shrunk.Config{
-			CheckPath: "/home/faker",
+		err := shrunk.NewShrunker(&shrunk.Config{
+			CheckPath: checkPath,
 			RemoveDirNames: []string{
 				"test",
 				"tests",
 				"example",
 				"examples",
 			},
+			RemoveFileNames: []string{
+				"package.json",
+			},
+			VerboseOutput: verbose,
 		}).Start()
+		if err != nil {
+			fmt.Printf("Someghing broken=) %v\n", err)
+		}
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -62,41 +65,6 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.node_shrunker.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
-
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".node_shrunker" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".node_shrunker")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
+	rootCmd.PersistentFlags().StringVarP(&checkPath, "dir", "d", "", "path to directory where need cleanup")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "more detailed output")
 }
