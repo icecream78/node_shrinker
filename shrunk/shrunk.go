@@ -23,6 +23,7 @@ type Shrunker struct {
 	shrunkDirNames  map[string]struct{}
 	shrunkFileNames map[string]struct{}
 	shrunkFileExt   map[string]struct{}
+	excludeNames    map[string]struct{}
 	removeCh        chan *removeObjInfo
 	statsCh         chan dirStats
 }
@@ -41,13 +42,19 @@ func NewShrunker(cfg *Config) *Shrunker {
 	return &Shrunker{
 		verboseOutput:   cfg.VerboseOutput,
 		checkPath:       checkPath,
-		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames),
-		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames),
+		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, cfg.IncludeNames),
+		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames, cfg.IncludeNames),
 		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt),
+		excludeNames:    sliceToMap(cfg.ExcludeNames),
 		removeCh:        make(chan *removeObjInfo),
 		statsCh:         make(chan dirStats),
 		concurentLimit:  concurentLimit,
 	}
+}
+
+func (sh *Shrunker) isExcludeName(name string) bool {
+	_, exists := sh.excludeNames[name]
+	return exists
 }
 
 func (sh *Shrunker) isDirToRemove(name string) bool {
@@ -80,7 +87,9 @@ func (sh *Shrunker) runCleaners() (err error) {
 				}
 
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+					if sh.verboseOutput {
+						fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+					}
 					continue
 				}
 
@@ -92,7 +101,9 @@ func (sh *Shrunker) runCleaners() (err error) {
 					err = os.Remove(obj.fullpath)
 				}
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+					if sh.verboseOutput {
+						fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+					}
 					continue
 				}
 				sh.statsCh <- *stat
@@ -125,6 +136,10 @@ func (sh *Shrunker) Start() error {
 }
 
 func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) error {
+	if sh.isExcludeName(de.Name()) {
+		return fmt.Errorf("file %s in exlclude list", osPathname)
+	}
+
 	if de.IsDir() && sh.isDirToRemove(de.Name()) {
 		sh.removeCh <- &removeObjInfo{
 			isDir:    de.IsDir(),
@@ -144,7 +159,9 @@ func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) 
 
 func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) godirwalk.ErrorAction {
 	// TODO: more informative logging about errors
-	fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+	if sh.verboseOutput {
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+	}
 	return godirwalk.SkipNode
 }
 

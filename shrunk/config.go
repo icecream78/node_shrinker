@@ -7,4 +7,6 @@ type Config struct {
 	RemoveDirNames  []string
 	RemoveFileNames []string
 	RemoveFileExt   []string
+	ExcludeNames    []string
+	IncludeNames    []string
 }
