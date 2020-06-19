@@ -55,6 +55,7 @@ func (sh *Shrunker) runCleaners() error {
 		go func(done func()) {
 			var obj *removeObjInfo
 			var err error
+			var stat *dirStats
 			for obj = range sh.removeCh {
 				if sh.verboseOutput {
 					fmt.Printf("removing: %s\n", obj.fullpath)
@@ -65,12 +66,14 @@ func (sh *Shrunker) runCleaners() error {
 					continue
 				}
 				if obj.isDir {
-					stat, _ := getDirectoryStats(obj.fullpath)
+					stat, _ = getDirectoryStats(obj.fullpath)
 					err = os.RemoveAll(obj.fullpath)
-					sh.statsCh <- *stat
 				} else {
-					stat, _ := getFileStats(obj.fullpath)
+					stat, _ = getFileStats(obj.fullpath)
 					err = os.Remove(obj.fullpath)
+				}
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 					sh.statsCh <- *stat
 				}
 			}
