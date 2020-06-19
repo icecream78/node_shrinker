@@ -22,6 +22,7 @@ type Shrunker struct {
 	checkPath       string
 	shrunkDirNames  map[string]struct{}
 	shrunkFileNames map[string]struct{}
+	shrunkFileExt   map[string]struct{}
 	removeCh        chan *removeObjInfo
 	statsCh         chan dirStats
 }
@@ -42,19 +43,36 @@ func NewShrunker(cfg *Config) *Shrunker {
 		checkPath:       checkPath,
 		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames),
 		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames),
+		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt),
 		removeCh:        make(chan *removeObjInfo),
 		statsCh:         make(chan dirStats),
 		concurentLimit:  concurentLimit,
 	}
 }
 
-func (sh *Shrunker) runCleaners() error {
+func (sh *Shrunker) isDirToRemove(name string) bool {
+	_, exists := sh.shrunkDirNames[name]
+	return exists
+}
+
+func (sh *Shrunker) isFileToRemove(name string) bool {
+	var exists bool
+	if _, exists = sh.shrunkFileNames[name]; exists {
+		return exists
+	}
+	ext := filepath.Ext(name)
+	if _, exists = sh.shrunkFileExt[ext]; exists {
+		return exists
+	}
+	return exists
+}
+
+func (sh *Shrunker) runCleaners() (err error) {
 	var wg sync.WaitGroup
 	wg.Add(sh.concurentLimit)
 	for i := 0; i < sh.concurentLimit; i++ {
 		go func(done func()) {
 			var obj *removeObjInfo
-			var err error
 			var stat *dirStats
 			for obj = range sh.removeCh {
 				if sh.verboseOutput {
@@ -65,6 +83,7 @@ func (sh *Shrunker) runCleaners() error {
 					fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 					continue
 				}
+
 				if obj.isDir {
 					stat, _ = getDirectoryStats(obj.fullpath)
 					err = os.RemoveAll(obj.fullpath)
@@ -74,8 +93,9 @@ func (sh *Shrunker) runCleaners() error {
 				}
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
-					sh.statsCh <- *stat
+					continue
 				}
+				sh.statsCh <- *stat
 			}
 			done()
 		}(wg.Done)
@@ -105,22 +125,18 @@ func (sh *Shrunker) Start() error {
 }
 
 func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) error {
-	if de.IsDir() {
-		if _, exists := sh.shrunkDirNames[de.Name()]; exists {
-			sh.removeCh <- &removeObjInfo{
-				isDir:    de.IsDir(),
-				filename: de.Name(),
-				fullpath: osPathname,
-			}
-			return errors.New("skip dir " + osPathname)
+	if de.IsDir() && sh.isDirToRemove(de.Name()) {
+		sh.removeCh <- &removeObjInfo{
+			isDir:    de.IsDir(),
+			filename: de.Name(),
+			fullpath: osPathname,
 		}
-	} else if de.IsRegular() {
-		if _, exists := sh.shrunkFileNames[de.Name()]; exists {
-			sh.removeCh <- &removeObjInfo{
-				isDir:    de.IsDir(),
-				filename: de.Name(),
-				fullpath: osPathname,
-			}
+		return errors.New("skip dir " + osPathname)
+	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
+		sh.removeCh <- &removeObjInfo{
+			isDir:    de.IsDir(),
+			filename: de.Name(),
+			fullpath: osPathname,
 		}
 	}
 	return nil

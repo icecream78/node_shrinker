@@ -31,7 +31,12 @@ func getDirectoryStats(filepath string) (*dirStats, error) {
 			if de.IsDir() {
 				return nil
 			}
-			st, _ := os.Stat(filepath)
+			st, stErr := os.Stat(filepath)
+			if stErr != nil {
+				// cannnot get stat from file, so we cannot remove it and not count this file in result stats
+				return nil
+			}
+
 			stats.size = st.Size()
 			stats.removedCount++
 			return nil

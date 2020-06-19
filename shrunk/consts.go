@@ -10,3 +10,9 @@ var DefaultRemoveDirNames []string = []string{
 var DefaultRemoveFileNames []string = []string{
 	"package.json",
 }
+
+var DefaultRemoveFileExt []string = []string{
+	".ts",
+	".d.ts",
+	".coffee",
+}
