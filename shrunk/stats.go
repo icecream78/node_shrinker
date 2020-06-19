@@ -25,22 +25,21 @@ func (s *dirStats) getHumanSizeFormat(format sizeFormat) int64 {
 
 func getDirectoryStats(filepath string) (*dirStats, error) {
 	stats := dirStats{}
-	err := godirwalk.Walk(filepath, &godirwalk.Options{
-		Unsorted: true, // for higher speed walking dir tree
-		Callback: func(path string, de *godirwalk.Dirent) error {
-			if de.IsDir() {
-				return nil
-			}
-			st, stErr := os.Stat(filepath)
-			if stErr != nil {
-				// cannnot get stat from file, so we cannot remove it and not count this file in result stats
-				return nil
-			}
-
-			stats.size = st.Size()
-			stats.removedCount++
+	err := newDirWalker().Walk(filepath, func(path string, de *godirwalk.Dirent) error {
+		if de.IsDir() {
 			return nil
-		},
+		}
+		st, stErr := os.Stat(filepath)
+		if stErr != nil {
+			// cannnot get stat from file, so we cannot remove it and not count this file in result stats
+			return nil
+		}
+
+		stats.size = st.Size()
+		stats.removedCount++
+		return nil
+	}, func(string, error) godirwalk.ErrorAction {
+		return godirwalk.SkipNode
 	})
 	return &stats, err
 }

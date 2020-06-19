@@ -26,6 +26,8 @@ type Shrunker struct {
 	excludeNames    map[string]struct{}
 	removeCh        chan *removeObjInfo
 	statsCh         chan dirStats
+
+	walker Walker
 }
 
 func NewShrunker(cfg *Config) *Shrunker {
@@ -49,6 +51,7 @@ func NewShrunker(cfg *Config) *Shrunker {
 		removeCh:        make(chan *removeObjInfo),
 		statsCh:         make(chan dirStats),
 		concurentLimit:  concurentLimit,
+		walker:          newDirWalker(),
 	}
 }
 
@@ -95,11 +98,10 @@ func (sh *Shrunker) runCleaners() (err error) {
 
 				if obj.isDir {
 					stat, _ = getDirectoryStats(obj.fullpath)
-					err = os.RemoveAll(obj.fullpath)
 				} else {
 					stat, _ = getFileStats(obj.fullpath)
-					err = os.Remove(obj.fullpath)
 				}
+				err = os.RemoveAll(obj.fullpath)
 				if err != nil {
 					if sh.verboseOutput {
 						fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
@@ -112,6 +114,7 @@ func (sh *Shrunker) runCleaners() (err error) {
 		}(wg.Done)
 	}
 	wg.Wait()
+	close(sh.statsCh)
 	return nil
 }
 
@@ -176,14 +179,9 @@ func (sh *Shrunker) start() error {
 	statsCh := sh.runStatGrabber()
 
 	fmt.Printf("Start checking directory %s\n", sh.checkPath)
-	err := godirwalk.Walk(sh.checkPath, &godirwalk.Options{
-		Unsorted:      true, // for higher speed walking dir tree
-		Callback:      sh.fileFilterCallback,
-		ErrorCallback: sh.fileFilterErrCallback,
-	})
+	err := sh.walker.Walk(sh.checkPath, sh.fileFilterCallback, sh.fileFilterErrCallback)
 
 	close(sh.removeCh)
-	close(sh.statsCh)
 
 	stats := <-statsCh
 
