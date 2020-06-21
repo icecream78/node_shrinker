@@ -1,8 +1,6 @@
 package shrunk
 
 import (
-	"os"
-
 	"github.com/karrick/godirwalk"
 )
 
@@ -29,7 +27,7 @@ func getDirectoryStats(filepath string) (*dirStats, error) {
 		if de.IsDir() {
 			return nil
 		}
-		st, stErr := os.Stat(filepath)
+		st, stErr := osManager.Stat(filepath)
 		if stErr != nil {
 			// cannnot get stat from file, so we cannot remove it and not count this file in result stats
 			return nil
@@ -45,7 +43,7 @@ func getDirectoryStats(filepath string) (*dirStats, error) {
 }
 
 func getFileStats(filepath string) (*dirStats, error) {
-	st, _ := os.Stat(filepath)
+	st, _ := osManager.Stat(filepath)
 	return &dirStats{
 		size:         st.Size(),
 		removedCount: 1,

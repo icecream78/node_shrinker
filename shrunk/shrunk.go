@@ -3,12 +3,13 @@ package shrunk
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/karrick/godirwalk"
 )
+
+var osManager osI = newOs() // for test purposes
 
 type removeObjInfo struct {
 	isDir    bool
@@ -37,7 +38,7 @@ func NewShrunker(cfg *Config) *Shrunker {
 	}
 	checkPath := cfg.CheckPath
 	if checkPath == "" {
-		path, _ := os.Getwd()
+		path, _ := osManager.Getwd()
 		checkPath = filepath.Join(path, "node_modules")
 	}
 
@@ -91,7 +92,7 @@ func (sh *Shrunker) runCleaners() (err error) {
 
 				if err != nil {
 					if sh.verboseOutput {
-						fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+						fmt.Printf("ERROR: %s\n", err)
 					}
 					continue
 				}
@@ -101,10 +102,9 @@ func (sh *Shrunker) runCleaners() (err error) {
 				} else {
 					stat, _ = getFileStats(obj.fullpath)
 				}
-				err = os.RemoveAll(obj.fullpath)
-				if err != nil {
+				if err = osManager.RemoveAll(obj.fullpath); err != nil {
 					if sh.verboseOutput {
-						fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+						fmt.Printf("ERROR: %s\n", err)
 					}
 					continue
 				}
@@ -163,7 +163,7 @@ func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) 
 func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) godirwalk.ErrorAction {
 	// TODO: more informative logging about errors
 	if sh.verboseOutput {
-		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+		fmt.Printf("ERROR: %s\n", err)
 	}
 	return godirwalk.SkipNode
 }
@@ -187,8 +187,8 @@ func (sh *Shrunker) start() error {
 
 	if err != nil {
 		// TODO: write error handler with case checking
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-		os.Exit(1)
+		fmt.Printf("%s\n", err)
+		osManager.Exit(1)
 	}
 
 	fmt.Println("Remove stats:")
