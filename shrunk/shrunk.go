@@ -9,7 +9,7 @@ import (
 	"github.com/karrick/godirwalk"
 )
 
-var osManager osI = newOs() // for test purposes
+var osManager OsI = newOs() // for test purposes
 
 type removeObjInfo struct {
 	isDir    bool

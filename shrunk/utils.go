@@ -1,6 +1,9 @@
 package shrunk
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 func sliceToMap(sl ...[]string) map[string]struct{} {
 	m := make(map[string]struct{})
@@ -19,4 +22,8 @@ func pathExists(path string) bool {
 		return false
 	}
 	return true
+}
+
+func testCall(dsdas OsI) {
+	fmt.Println("dsadas")
 }
