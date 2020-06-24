@@ -3,12 +3,17 @@ package shrunk
 import (
 	"os"
 	"testing"
-
-	"github.com/icecream78/node_shrunker/mocks"
 )
 
+func newOsManagerMock() *osManagerMock {
+	return &osManagerMock{
+		MockOsI:       new(MockOsI),
+		fileStructure: make(map[string]*FileStat),
+	}
+}
+
 type osManagerMock struct {
-	mocks.OsI
+	*MockOsI
 	fileStructure map[string]*FileStat
 }
 
