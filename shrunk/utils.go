@@ -1,7 +1,6 @@
 package shrunk
 
 import (
-	"fmt"
 	"os"
 )
 
@@ -22,8 +21,4 @@ func pathExists(path string) bool {
 		return false
 	}
 	return true
-}
-
-func testCall(dsdas OsI) {
-	fmt.Println("dsadas")
 }

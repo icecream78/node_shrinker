@@ -1,34 +1,8 @@
 package shrunk
 
 import (
-	"os"
 	"testing"
 )
-
-func newOsManagerMock() *osManagerMock {
-	return &osManagerMock{
-		MockOsI:       new(MockOsI),
-		fileStructure: make(map[string]*FileStat),
-	}
-}
-
-type osManagerMock struct {
-	*MockOsI
-	fileStructure map[string]*FileStat
-}
-
-func (o *osManagerMock) setFileStructure(structure map[string]*FileStat) {
-	o.fileStructure = structure
-}
-
-func (o *osManagerMock) getFileStats(filepath string) (*FileStat, error) {
-	file, exists := o.fileStructure[filepath]
-	if !exists {
-		return nil, os.ErrNotExist
-	}
-
-	return file, nil
-}
 
 func TestSimpleCase(t *testing.T) {
 	// osMock := new(osManagerMock)
