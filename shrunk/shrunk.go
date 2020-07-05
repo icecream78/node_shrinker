@@ -1,15 +1,17 @@
 package shrunk
 
 import (
-	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/karrick/godirwalk"
+	. "github.com/icecream78/node_shrunker/fs"
+	. "github.com/icecream78/node_shrunker/walker"
 )
 
-var osManager OsI = newOs() // for test purposes
+var fsManager FS = NewFS() // for test purposes
+var walker Walker = NewDirWalker()
 
 type removeObjInfo struct {
 	isDir    bool
@@ -26,9 +28,7 @@ type Shrunker struct {
 	shrunkFileExt   map[string]struct{}
 	excludeNames    map[string]struct{}
 	removeCh        chan *removeObjInfo
-	statsCh         chan dirStats
-
-	walker Walker
+	statsCh         chan FileStat
 }
 
 func NewShrunker(cfg *Config) *Shrunker {
@@ -38,7 +38,7 @@ func NewShrunker(cfg *Config) *Shrunker {
 	}
 	checkPath := cfg.CheckPath
 	if checkPath == "" {
-		path, _ := osManager.Getwd()
+		path, _ := fsManager.Getwd()
 		checkPath = filepath.Join(path, "node_modules")
 	}
 
@@ -47,12 +47,11 @@ func NewShrunker(cfg *Config) *Shrunker {
 		checkPath:       checkPath,
 		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, cfg.IncludeNames),
 		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames, cfg.IncludeNames),
-		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt),
+		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
 		excludeNames:    sliceToMap(cfg.ExcludeNames),
 		removeCh:        make(chan *removeObjInfo),
-		statsCh:         make(chan dirStats),
+		statsCh:         make(chan FileStat),
 		concurentLimit:  concurentLimit,
-		walker:          newDirWalker(),
 	}
 }
 
@@ -66,16 +65,18 @@ func (sh *Shrunker) isDirToRemove(name string) bool {
 	return exists
 }
 
-func (sh *Shrunker) isFileToRemove(name string) bool {
-	var exists bool
+func (sh *Shrunker) isFileToRemove(name string) (exists bool) {
 	if _, exists = sh.shrunkFileNames[name]; exists {
-		return exists
+		return
 	}
 	ext := filepath.Ext(name)
-	if _, exists = sh.shrunkFileExt[ext]; exists {
-		return exists
+	if ext == name { // for cases, when files starts with leading dot
+		return
 	}
-	return exists
+	if _, exists = sh.shrunkFileExt[ext]; exists {
+		return
+	}
+	return
 }
 
 func (sh *Shrunker) runCleaners() (err error) {
@@ -84,7 +85,7 @@ func (sh *Shrunker) runCleaners() (err error) {
 	for i := 0; i < sh.concurentLimit; i++ {
 		go func(done func()) {
 			var obj *removeObjInfo
-			var stat *dirStats
+			var stat *FileStat
 			for obj = range sh.removeCh {
 				if sh.verboseOutput {
 					fmt.Printf("removing: %s\n", obj.fullpath)
@@ -98,11 +99,12 @@ func (sh *Shrunker) runCleaners() (err error) {
 				}
 
 				if obj.isDir {
-					stat, _ = getDirectoryStats(obj.fullpath)
+					stat, _ = fsManager.Stat(obj.fullpath, true)
 				} else {
-					stat, _ = getFileStats(obj.fullpath)
+					stat, _ = fsManager.Stat(obj.fullpath, false)
 				}
-				if err = osManager.RemoveAll(obj.fullpath); err != nil {
+
+				if err = fsManager.RemoveAll(obj.fullpath); err != nil {
 					if sh.verboseOutput {
 						fmt.Printf("ERROR: %s\n", err)
 					}
@@ -118,17 +120,18 @@ func (sh *Shrunker) runCleaners() (err error) {
 	return nil
 }
 
-func (sh *Shrunker) runStatGrabber() chan dirStats {
-	resCh := make(chan dirStats)
+func (sh *Shrunker) runStatGrabber() chan FileStat {
+	resCh := make(chan FileStat)
 
-	go func(resCh chan dirStats) {
-		var totalStats dirStats
-		var stat dirStats
+	go func(resCh chan FileStat) {
+		var stat FileStat
+		var removedCount int64
+		var removedSize int64
 		for stat = range sh.statsCh {
-			totalStats.removedCount += stat.removedCount
-			totalStats.size += stat.size
+			removedCount += stat.FilesCount()
+			removedSize += stat.Size()
 		}
-		resCh <- totalStats
+		resCh <- *NewFileStat("result", "result", removedSize, removedCount)
 	}(resCh)
 
 	return resCh
@@ -138,9 +141,10 @@ func (sh *Shrunker) Start() error {
 	return sh.start()
 }
 
-func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) error {
+// TODO: add errors wrapping for correct handling errors
+func (sh *Shrunker) fileFilterCallback(osPathname string, de FileInfoI) error {
 	if sh.isExcludeName(de.Name()) {
-		return fmt.Errorf("file %s in exlclude list", osPathname)
+		return ExcludeError
 	}
 
 	if de.IsDir() && sh.isDirToRemove(de.Name()) {
@@ -149,7 +153,7 @@ func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) 
 			filename: de.Name(),
 			fullpath: osPathname,
 		}
-		return errors.New("skip dir " + osPathname)
+		return SkipDirError
 	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
 		sh.removeCh <- &removeObjInfo{
 			isDir:    de.IsDir(),
@@ -157,15 +161,15 @@ func (sh *Shrunker) fileFilterCallback(osPathname string, de *godirwalk.Dirent) 
 			fullpath: osPathname,
 		}
 	}
-	return nil
+	return NotProcessError
 }
 
-func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) godirwalk.ErrorAction {
+func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
 	// TODO: more informative logging about errors
 	if sh.verboseOutput {
 		fmt.Printf("ERROR: %s\n", err)
 	}
-	return godirwalk.SkipNode
+	return SkipNode
 }
 
 // TODO: think how add progress bar
@@ -179,7 +183,7 @@ func (sh *Shrunker) start() error {
 	statsCh := sh.runStatGrabber()
 
 	fmt.Printf("Start checking directory %s\n", sh.checkPath)
-	err := sh.walker.Walk(sh.checkPath, sh.fileFilterCallback, sh.fileFilterErrCallback)
+	err := walker.Walk(sh.checkPath, sh.fileFilterCallback, sh.fileFilterErrCallback)
 
 	close(sh.removeCh)
 
@@ -188,11 +192,11 @@ func (sh *Shrunker) start() error {
 	if err != nil {
 		// TODO: write error handler with case checking
 		fmt.Printf("%s\n", err)
-		osManager.Exit(1)
+		os.Exit(1)
 	}
 
 	fmt.Println("Remove stats:")
-	fmt.Printf("total removed: %d MB\n", stats.getHumanSizeFormat(megabyesFormat))
-	fmt.Printf("files removed: %d\n", stats.removedCount)
+	fmt.Printf("total removed: %d MB\n", stats.GetHumanSizeFormat(MegabyesFormat))
+	fmt.Printf("files removed: %d\n", stats.FilesCount())
 	return err
 }

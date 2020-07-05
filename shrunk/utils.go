@@ -16,7 +16,7 @@ func sliceToMap(sl ...[]string) map[string]struct{} {
 }
 
 func pathExists(path string) bool {
-	_, err := osManager.Stat(path)
+	_, err := fsManager.Stat(path, false)
 	if os.IsNotExist(err) {
 		return false
 	}
