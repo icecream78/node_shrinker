@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/icecream78/node_shrunker/fs"
+	"github.com/icecream78/node_shrunker/mocks"
 
 	. "github.com/icecream78/node_shrunker/walker"
 	"github.com/stretchr/testify/assert"
@@ -255,4 +256,85 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 			assert.Equal(t, tc.want, actionCode, fmt.Sprintf("Input: %v", tc.inputErr))
 		})
 	}
+}
+
+func TestCleanerFunc(t *testing.T) {
+	testCases := []struct {
+		alias    string
+		input    []removeObjInfo
+		want     *fs.FileStat
+		waitResp bool
+	}{
+		{
+			alias:    "Check empty input files list",
+			input:    []removeObjInfo{},
+			waitResp: true,
+			want:     fs.NewFileStat("result", "result", 0, 0),
+		},
+		{
+			alias: "Check basic remove file",
+			input: []removeObjInfo{
+				{isDir: false, filename: "test1", fullpath: "/test1"},
+			},
+			waitResp: true,
+			want:     fs.NewFileStat("test1", "/test1", 1, 1),
+		},
+		// TODO: fix test failing with goroutines
+		// {
+		// 	alias: "Check basic remove directory",
+		// 	input: []removeObjInfo{
+		// 		{isDir: true, filename: "dir1", fullpath: "/dir1"},
+		// 	},
+		// 	waitResp: true,
+		// 	want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
+		// },
+		{
+			alias: "Check file with error",
+			input: []removeObjInfo{
+				{isDir: false, filename: "test2", fullpath: "/test2"},
+			},
+			waitResp: true,
+			want:     nil,
+		},
+		{
+			alias: "Check remove file with error",
+			input: []removeObjInfo{
+				{isDir: false, filename: "test3", fullpath: "/test3"},
+			},
+			waitResp: true,
+			want:     nil,
+		},
+	}
+
+	// prepare test
+	osMock := new(mocks.FS)
+	fsManager = osMock
+	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
+	osMock.On("Stat", "/test2", false).Return(fs.NewFileStat("", "", 0, 0), errors.New("some error"))
+	// osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
+	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
+	osMock.On("Getwd").Return("/here", nil)
+	osMock.On("RemoveAll", "/test1").Return(nil)
+	// osMock.On("RemoveAll", "/dir1").Return(nil)
+	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
+
+	for _, tc := range testCases {
+		sh := NewShrunker(&Config{
+			VerboseOutput: true,
+		})
+		go sh.cleaner(func() {})
+		t.Run(tc.alias, func(t *testing.T) {
+			if tc.waitResp {
+				go func() {
+					stats := <-sh.statsCh
+					close(sh.statsCh)
+					assert.Equal(t, tc.want, &stats, fmt.Sprintf("Input: %v", tc.input))
+				}()
+			}
+			for _, file := range tc.input {
+				sh.removeCh <- &file
+			}
+		})
+	}
+	osMock.AssertExpectations(t)
 }

@@ -79,41 +79,45 @@ func (sh *Shrunker) isFileToRemove(name string) (exists bool) {
 	return
 }
 
+func (sh *Shrunker) cleaner(done func()) {
+	var err error
+	var obj *removeObjInfo
+	var stat *FileStat
+
+	for obj = range sh.removeCh {
+		if sh.verboseOutput {
+			fmt.Printf("removing: %s\n", obj.fullpath)
+		}
+
+		if obj.isDir {
+			stat, err = fsManager.Stat(obj.fullpath, true)
+		} else {
+			stat, err = fsManager.Stat(obj.fullpath, false)
+		}
+
+		if err != nil {
+			if sh.verboseOutput {
+				fmt.Printf("ERROR: %s\n", err)
+			}
+			continue
+		}
+
+		if err = fsManager.RemoveAll(obj.fullpath); err != nil {
+			if sh.verboseOutput {
+				fmt.Printf("ERROR: %s\n", err)
+			}
+			continue
+		}
+		sh.statsCh <- *stat
+	}
+	done()
+}
+
 func (sh *Shrunker) runCleaners() (err error) {
 	var wg sync.WaitGroup
 	wg.Add(sh.concurentLimit)
 	for i := 0; i < sh.concurentLimit; i++ {
-		go func(done func()) {
-			var obj *removeObjInfo
-			var stat *FileStat
-			for obj = range sh.removeCh {
-				if sh.verboseOutput {
-					fmt.Printf("removing: %s\n", obj.fullpath)
-				}
-
-				if err != nil {
-					if sh.verboseOutput {
-						fmt.Printf("ERROR: %s\n", err)
-					}
-					continue
-				}
-
-				if obj.isDir {
-					stat, _ = fsManager.Stat(obj.fullpath, true)
-				} else {
-					stat, _ = fsManager.Stat(obj.fullpath, false)
-				}
-
-				if err = fsManager.RemoveAll(obj.fullpath); err != nil {
-					if sh.verboseOutput {
-						fmt.Printf("ERROR: %s\n", err)
-					}
-					continue
-				}
-				sh.statsCh <- *stat
-			}
-			done()
-		}(wg.Done)
+		go sh.cleaner(wg.Done)
 	}
 	wg.Wait()
 	close(sh.statsCh)
