@@ -1,6 +1,7 @@
 package shrunk
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -226,6 +227,32 @@ func TestFileFilterCallbakc(t *testing.T) {
 					return
 				}
 			}
+		})
+	}
+}
+
+func TestFileFilterErrCallbakc(t *testing.T) {
+	testCases := []struct {
+		alias    string
+		fullpath string
+		inputErr error
+		want     ErrorAction
+	}{
+		{
+			alias:    "custom error",
+			fullpath: "/path",
+			inputErr: errors.New("custom error"),
+			want:     SkipNode,
+		},
+	}
+
+	for _, tc := range testCases {
+		sh := NewShrunker(&Config{
+			VerboseOutput: true,
+		})
+		t.Run(tc.alias, func(t *testing.T) {
+			actionCode := sh.fileFilterErrCallback(tc.fullpath, tc.inputErr)
+			assert.Equal(t, tc.want, actionCode, fmt.Sprintf("Input: %v", tc.inputErr))
 		})
 	}
 }
