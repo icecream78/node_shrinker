@@ -249,7 +249,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 
 	for _, tc := range testCases {
 		sh := NewShrunker(&Config{
-			VerboseOutput: true,
+			VerboseOutput: false,
 		})
 		t.Run(tc.alias, func(t *testing.T) {
 			actionCode := sh.fileFilterErrCallback(tc.fullpath, tc.inputErr)
@@ -279,15 +279,14 @@ func TestCleanerFunc(t *testing.T) {
 			waitResp: true,
 			want:     fs.NewFileStat("test1", "/test1", 1, 1),
 		},
-		// TODO: fix test failing with goroutines
-		// {
-		// 	alias: "Check basic remove directory",
-		// 	input: []removeObjInfo{
-		// 		{isDir: true, filename: "dir1", fullpath: "/dir1"},
-		// 	},
-		// 	waitResp: true,
-		// 	want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
-		// },
+		{
+			alias: "Check basic remove directory",
+			input: []removeObjInfo{
+				{isDir: true, filename: "dir1", fullpath: "/dir1"},
+			},
+			waitResp: true,
+			want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
+		},
 		{
 			alias: "Check file with error",
 			input: []removeObjInfo{
@@ -309,20 +308,25 @@ func TestCleanerFunc(t *testing.T) {
 	// prepare test
 	osMock := new(mocks.FS)
 	fsManager = osMock
-	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
-	osMock.On("Stat", "/test2", false).Return(fs.NewFileStat("", "", 0, 0), errors.New("some error"))
-	// osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
-	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("Getwd").Return("/here", nil)
+
+	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
-	// osMock.On("RemoveAll", "/dir1").Return(nil)
+
+	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
+	osMock.On("RemoveAll", "/dir1").Return(nil)
+
+	osMock.On("Stat", "/test2", false).Return(fs.NewFileStat("", "", 0, 0), errors.New("some error"))
+
+	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
 	for _, tc := range testCases {
 		sh := NewShrunker(&Config{
-			VerboseOutput: true,
+			VerboseOutput: false,
 		})
 		go sh.cleaner(func() {})
+
 		t.Run(tc.alias, func(t *testing.T) {
 			if tc.waitResp {
 				go func() {
@@ -334,7 +338,13 @@ func TestCleanerFunc(t *testing.T) {
 			for _, file := range tc.input {
 				sh.removeCh <- &file
 			}
+			close(sh.removeCh)
 		})
 	}
 	osMock.AssertExpectations(t)
+}
+
+// TODO: write logic for separate logger testing
+func TestLogger(t *testing.T) {
+
 }
