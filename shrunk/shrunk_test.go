@@ -259,13 +259,15 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 	}
 }
 
+type cs struct {
+	alias    string
+	input    []removeObjInfo
+	want     *fs.FileStat
+	waitResp bool
+}
+
 func TestCleanerFunc(t *testing.T) {
-	testCases := []struct {
-		alias    string
-		input    []removeObjInfo
-		want     *fs.FileStat
-		waitResp bool
-	}{
+	testCases := []cs{
 		{
 			alias:    "Check empty input files list",
 			input:    []removeObjInfo{},
@@ -280,21 +282,20 @@ func TestCleanerFunc(t *testing.T) {
 			waitResp: true,
 			want:     fs.NewFileStat("test1", "/test1", 1, 1),
 		},
-		// TODO: fix failing test. for detecting use race flag in test run
-		// {
-		// 	alias: "Check basic remove directory",
-		// 	input: []removeObjInfo{
-		// 		{isDir: true, filename: "dir1", fullpath: "/dir1"},
-		// 	},
-		// 	waitResp: true,
-		// 	want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
-		// },
+		{
+			alias: "Check basic remove directory",
+			input: []removeObjInfo{
+				{isDir: true, filename: "dir1", fullpath: "/dir1"},
+			},
+			waitResp: true,
+			want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
+		},
 		{
 			alias: "Check file with error",
 			input: []removeObjInfo{
 				{isDir: false, filename: "test2", fullpath: "/test2"},
 			},
-			waitResp: true,
+			waitResp: false,
 			want:     nil,
 		},
 		{
@@ -302,7 +303,7 @@ func TestCleanerFunc(t *testing.T) {
 			input: []removeObjInfo{
 				{isDir: false, filename: "test3", fullpath: "/test3"},
 			},
-			waitResp: true,
+			waitResp: false,
 			want:     nil,
 		},
 	}
@@ -310,39 +311,43 @@ func TestCleanerFunc(t *testing.T) {
 	// prepare test
 	osMock := new(mocks.FS)
 	fsManager = osMock
-	osMock.On("Getwd").Return("/here", nil)
+	// osMock.On("Getwd").Return("/here", nil)
 
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
-	// osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
-	// osMock.On("RemoveAll", "/dir1").Return(nil)
+	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
+	osMock.On("RemoveAll", "/dir1").Return(nil)
 
-	osMock.On("Stat", "/test2", false).Return(fs.NewFileStat("", "", 0, 0), errors.New("some error"))
+	osMock.On("Stat", "/test2", false).Return(nil, errors.New("some error"))
 
 	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
 	for _, tc := range testCases {
-		sh := NewShrunker(&Config{
-			VerboseOutput: false,
-		})
-		go sh.cleaner(func() {})
-
 		t.Run(tc.alias, func(t *testing.T) {
-			if tc.waitResp {
-				go func() {
-					stats := <-sh.statsCh
-					close(sh.statsCh)
-					assert.Equal(t, tc.want, &stats, fmt.Sprintf("Input: %v", tc.input))
-				}()
-			}
-			for _, file := range tc.input {
-				sh.removeCh <- &file
-			}
-			close(sh.removeCh)
+			func(t *testing.T, tc cs) {
+				sh := NewShrunker(&Config{
+					CheckPath:     "/here",
+					VerboseOutput: false,
+				})
+				go sh.cleaner(func() {})
+				if tc.waitResp {
+					go func() {
+						stats := <-sh.statsCh
+						close(sh.statsCh)
+						assert.Equal(t, tc.want, &stats, fmt.Sprintf("Input: %v", tc.input))
+					}()
+				}
+				for _, file := range tc.input {
+					sh.removeCh <- &file
+				}
+				close(sh.removeCh)
+				return
+			}(t, tc)
 		})
 	}
+
 	osMock.AssertExpectations(t)
 }
 
