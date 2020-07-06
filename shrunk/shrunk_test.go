@@ -315,8 +315,8 @@ func TestCleanerFunc(t *testing.T) {
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
-	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
-	osMock.On("RemoveAll", "/dir1").Return(nil)
+	// osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
+	// osMock.On("RemoveAll", "/dir1").Return(nil)
 
 	osMock.On("Stat", "/test2", false).Return(fs.NewFileStat("", "", 0, 0), errors.New("some error"))
 

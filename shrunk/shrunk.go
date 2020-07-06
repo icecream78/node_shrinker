@@ -180,7 +180,9 @@ func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 // TODO: think how add progress bar
 func (sh *Shrunker) start() error {
 	if !pathExists(sh.checkPath) {
-		fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
+		if sh.verboseOutput {
+			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
+		}
 		return errors.New("path doesn`t exist")
 	}
 

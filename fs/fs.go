@@ -20,7 +20,11 @@ func NewFS() *fsClass {
 type fsClass struct {
 }
 
-func (o *fsClass) Stat(filepath string, recursive bool) (*FileStat, error) {
+func (fs *fsClass) Stat(filepath string, recursive bool) (*FileStat, error) {
+	if recursive {
+		return fs.getRecursiveStat(filepath)
+	}
+
 	stat, err := os.Stat(filepath)
 	if err != nil {
 		return nil, err
@@ -33,10 +37,10 @@ func (o *fsClass) Stat(filepath string, recursive bool) (*FileStat, error) {
 	}, nil
 }
 
-func (o *fsClass) getRecursiveStat(filepath string) (*FileStat, error) {
+func (fs *fsClass) getRecursiveStat(filepath string) (*FileStat, error) {
 	stats := FileStat{filename: filepath, fullpath: filepath}
 	err := NewDirWalker().Walk(filepath, func(path string, de FileInfoI) error {
-		st, stErr := o.Stat(filepath, de.IsDir())
+		st, stErr := fs.Stat(filepath, de.IsDir())
 		if stErr != nil {
 			// cannnot get stat from file, so we cannot remove it and not count this file in result stats
 			return nil
@@ -51,14 +55,14 @@ func (o *fsClass) getRecursiveStat(filepath string) (*FileStat, error) {
 	return &stats, err
 }
 
-func (o *fsClass) RemoveAll(filepath string) error {
+func (fs *fsClass) RemoveAll(filepath string) error {
 	return os.RemoveAll(filepath)
 }
 
-func (o *fsClass) Remove(filepath string) error {
+func (fs *fsClass) Remove(filepath string) error {
 	return os.Remove(filepath)
 }
 
-func (o *fsClass) Getwd() (string, error) {
+func (fs *fsClass) Getwd() (string, error) {
 	return os.Getwd()
 }
