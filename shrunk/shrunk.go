@@ -1,6 +1,7 @@
 package shrunk
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -180,7 +181,7 @@ func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 func (sh *Shrunker) start() error {
 	if !pathExists(sh.checkPath) {
 		fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
-		return nil
+		return errors.New("path doesn`t exist")
 	}
 
 	go sh.runCleaners()
