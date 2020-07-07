@@ -266,87 +266,184 @@ type cs struct {
 	waitResp bool
 }
 
-func TestCleanerFunc(t *testing.T) {
-	testCases := []cs{
-		{
-			alias:    "Check empty input files list",
-			input:    []removeObjInfo{},
-			waitResp: true,
-			want:     fs.NewFileStat("result", "result", 0, 0),
-		},
-		{
-			alias: "Check basic remove file",
-			input: []removeObjInfo{
-				{isDir: false, filename: "test1", fullpath: "/test1"},
-			},
-			waitResp: true,
-			want:     fs.NewFileStat("test1", "/test1", 1, 1),
-		},
-		{
-			alias: "Check basic remove directory",
-			input: []removeObjInfo{
-				{isDir: true, filename: "dir1", fullpath: "/dir1"},
-			},
-			waitResp: true,
-			want:     fs.NewFileStat("dir1", "/dir1", 1, 1),
-		},
-		{
-			alias: "Check file with error",
-			input: []removeObjInfo{
-				{isDir: false, filename: "test2", fullpath: "/test2"},
-			},
-			waitResp: false,
-			want:     nil,
-		},
-		{
-			alias: "Check remove file with error",
-			input: []removeObjInfo{
-				{isDir: false, filename: "test3", fullpath: "/test3"},
-			},
-			waitResp: false,
-			want:     nil,
-		},
-	}
+func TestCleanerEmptyInput(t *testing.T) {
+	assert := assert.New(t)
+	sh := NewShrunker(&Config{
+		CheckPath:     "/here",
+		VerboseOutput: false,
+	})
+	go sh.cleaner(func() {
+		close(sh.statsCh)
+	})
+
+	close(sh.removeCh)
+	stats, ok := <-sh.statsCh
+
+	expectedChannelCloseStatus := false
+	expectedFile := fs.FileStat{}
+
+	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(&expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	return
+}
+
+func TestCleanerBasicRemoveFile(t *testing.T) {
+	assert := assert.New(t)
 
 	// prepare test
 	osMock := new(mocks.FS)
 	fsManager = osMock
-	// osMock.On("Getwd").Return("/here", nil)
 
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
+	sh := NewShrunker(&Config{
+		CheckPath:     "/here",
+		VerboseOutput: false,
+	})
+	go sh.cleaner(func() {
+		close(sh.statsCh)
+	})
+
+	input := []removeObjInfo{
+		{isDir: false, filename: "test1", fullpath: "/test1"},
+	}
+
+	for _, file := range input {
+		sh.removeCh <- &file
+	}
+
+	close(sh.removeCh)
+
+	stats, ok := <-sh.statsCh
+	expectedChannelCloseStatus := true
+	expectedFile := fs.NewFileStat("test1", "/test1", 1, 1)
+
+	assert.Equal(expectedChannelCloseStatus, ok, "is channel open")
+	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+
+	// checking is channel properly closed
+	expectedChannelCloseStatus2 := false
+	_, ok2 := <-sh.statsCh
+	assert.Equal(expectedChannelCloseStatus2, ok2, "is channel closed")
+
+	osMock.AssertExpectations(t)
+}
+
+func TestCleanerBasicRemoveDirectory(t *testing.T) {
+	assert := assert.New(t)
+
+	// prepare test
+	osMock := new(mocks.FS)
+	fsManager = osMock
+
 	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
 	osMock.On("RemoveAll", "/dir1").Return(nil)
 
+	sh := NewShrunker(&Config{
+		CheckPath:     "/here",
+		VerboseOutput: false,
+	})
+	go sh.cleaner(func() {
+		close(sh.statsCh)
+	})
+
+	input := []removeObjInfo{
+		{isDir: true, filename: "dir1", fullpath: "/dir1"},
+	}
+
+	for _, file := range input {
+		sh.removeCh <- &file
+	}
+
+	close(sh.removeCh)
+
+	stats, ok := <-sh.statsCh
+	expectedChannelCloseStatus := true
+	expectedFile := fs.NewFileStat("dir1", "/dir1", 1, 1)
+
+	assert.Equal(expectedChannelCloseStatus, ok, "is channel open")
+	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+
+	// checking is channel properly closed
+	expectedChannelCloseStatus2 := false
+	_, ok2 := <-sh.statsCh
+	assert.Equal(expectedChannelCloseStatus2, ok2, "is channel closed")
+
+	osMock.AssertExpectations(t)
+}
+
+func TestCleanerStatFileWithError(t *testing.T) {
+	assert := assert.New(t)
+
+	// prepare test
+	osMock := new(mocks.FS)
+	fsManager = osMock
+
 	osMock.On("Stat", "/test2", false).Return(nil, errors.New("some error"))
+
+	sh := NewShrunker(&Config{
+		CheckPath:     "/here",
+		VerboseOutput: false,
+	})
+	go sh.cleaner(func() {
+		close(sh.statsCh)
+	})
+
+	input := []removeObjInfo{
+		{isDir: false, filename: "test2", fullpath: "/test2"},
+	}
+
+	for _, file := range input {
+		sh.removeCh <- &file
+	}
+
+	close(sh.removeCh)
+
+	stats, ok := <-sh.statsCh
+	expectedChannelCloseStatus := false
+	expectedFile := &fs.FileStat{}
+
+	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+
+	osMock.AssertExpectations(t)
+}
+
+func TestCleanerRemoveFileWithError(t *testing.T) {
+	assert := assert.New(t)
+
+	// prepare test
+	osMock := new(mocks.FS)
+	fsManager = osMock
 
 	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
-	for _, tc := range testCases {
-		t.Run(tc.alias, func(t *testing.T) {
-			func(t *testing.T, tc cs) {
-				sh := NewShrunker(&Config{
-					CheckPath:     "/here",
-					VerboseOutput: false,
-				})
-				go sh.cleaner(func() {})
-				if tc.waitResp {
-					go func() {
-						stats := <-sh.statsCh
-						close(sh.statsCh)
-						assert.Equal(t, tc.want, &stats, fmt.Sprintf("Input: %v", tc.input))
-					}()
-				}
-				for _, file := range tc.input {
-					sh.removeCh <- &file
-				}
-				close(sh.removeCh)
-				return
-			}(t, tc)
-		})
+	sh := NewShrunker(&Config{
+		CheckPath:     "/here",
+		VerboseOutput: false,
+	})
+	go sh.cleaner(func() {
+		close(sh.statsCh)
+	})
+
+	input := []removeObjInfo{
+		{isDir: false, filename: "test3", fullpath: "/test3"},
 	}
+
+	for _, file := range input {
+		sh.removeCh <- &file
+	}
+
+	close(sh.removeCh)
+
+	stats, ok := <-sh.statsCh
+	expectedChannelCloseStatus := false
+	expectedFile := &fs.FileStat{}
+
+	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
 
 	osMock.AssertExpectations(t)
 }
