@@ -259,13 +259,6 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 	}
 }
 
-type cs struct {
-	alias    string
-	input    []removeObjInfo
-	want     *fs.FileStat
-	waitResp bool
-}
-
 func TestCleanerEmptyInput(t *testing.T) {
 	assert := assert.New(t)
 	sh := NewShrunker(&Config{
