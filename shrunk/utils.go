@@ -1,6 +1,8 @@
 package shrunk
 
-import "os"
+import (
+	"os"
+)
 
 func sliceToMap(sl ...[]string) map[string]struct{} {
 	m := make(map[string]struct{})
@@ -14,7 +16,7 @@ func sliceToMap(sl ...[]string) map[string]struct{} {
 }
 
 func pathExists(path string) bool {
-	_, err := os.Stat(path)
+	_, err := fsManager.Stat(path, false)
 	if os.IsNotExist(err) {
 		return false
 	}
