@@ -21,15 +21,17 @@ type removeObjInfo struct {
 }
 
 type Shrinker struct {
-	verboseOutput   bool
-	concurentLimit  int
-	checkPath       string
-	shrunkDirNames  map[string]struct{}
-	shrunkFileNames map[string]struct{}
-	shrunkFileExt   map[string]struct{}
-	excludeNames    map[string]struct{}
-	removeCh        chan *removeObjInfo
-	statsCh         chan FileStat
+	verboseOutput      bool
+	concurentLimit     int
+	checkPath          string
+	shrunkDirNames     map[string]struct{}
+	shrunkFileNames    map[string]struct{}
+	shrunkFileExt      map[string]struct{}
+	excludeNames       map[string]struct{}
+	regExpIncludeNames map[string]struct{}
+	regExpExcludeNames map[string]struct{}
+	removeCh           chan *removeObjInfo
+	statsCh            chan FileStat
 }
 
 func NewShrinker(cfg *Config) *Shrinker {
@@ -43,16 +45,21 @@ func NewShrinker(cfg *Config) *Shrinker {
 		checkPath = filepath.Join(path, "node_modules")
 	}
 
+	patternInclude, regularInclude := devidePatternsFromRegularNames(cfg.IncludeNames)
+	patternExclude, regularExclude := devidePatternsFromRegularNames(cfg.ExcludeNames)
+
 	return &Shrinker{
-		verboseOutput:   cfg.VerboseOutput,
-		checkPath:       checkPath,
-		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, cfg.IncludeNames),
-		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames, cfg.IncludeNames),
-		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
-		excludeNames:    sliceToMap(cfg.ExcludeNames),
-		removeCh:        make(chan *removeObjInfo),
-		statsCh:         make(chan FileStat),
-		concurentLimit:  concurentLimit,
+		verboseOutput:      cfg.VerboseOutput,
+		checkPath:          checkPath,
+		shrunkDirNames:     sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, regularInclude),
+		shrunkFileNames:    sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames, regularInclude),
+		shrunkFileExt:      sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
+		excludeNames:       sliceToMap(regularExclude),
+		regExpIncludeNames: sliceToMap(patternInclude),
+		regExpExcludeNames: sliceToMap(patternExclude),
+		removeCh:           make(chan *removeObjInfo),
+		statsCh:            make(chan FileStat),
+		concurentLimit:     concurentLimit,
 	}
 }
 

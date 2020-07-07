@@ -25,3 +25,7 @@ func TestPathExists(t *testing.T) {
 
 	osMock.AssertExpectations(t)
 }
+
+func TestSplitPatternsFunc(t *testing.T) {
+
+}
