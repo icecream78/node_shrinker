@@ -3,7 +3,7 @@ package fs
 import (
 	"os"
 
-	. "github.com/icecream78/node_shrunker/walker"
+	. "github.com/icecream78/node_shrinker/walker"
 )
 
 type FS interface {

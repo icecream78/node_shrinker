@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	. "github.com/icecream78/node_shrunker/fs"
-	. "github.com/icecream78/node_shrunker/walker"
+	. "github.com/icecream78/node_shrinker/fs"
+	. "github.com/icecream78/node_shrinker/walker"
 )
 
 var fsManager FS = NewFS() // for test purposes
@@ -20,7 +20,7 @@ type removeObjInfo struct {
 	fullpath string
 }
 
-type Shrunker struct {
+type Shrinker struct {
 	verboseOutput   bool
 	concurentLimit  int
 	checkPath       string
@@ -32,7 +32,7 @@ type Shrunker struct {
 	statsCh         chan FileStat
 }
 
-func NewShrunker(cfg *Config) *Shrunker {
+func NewShrinker(cfg *Config) *Shrinker {
 	concurentLimit := cfg.ConcurentLimit
 	if concurentLimit == 0 {
 		concurentLimit = 4
@@ -43,7 +43,7 @@ func NewShrunker(cfg *Config) *Shrunker {
 		checkPath = filepath.Join(path, "node_modules")
 	}
 
-	return &Shrunker{
+	return &Shrinker{
 		verboseOutput:   cfg.VerboseOutput,
 		checkPath:       checkPath,
 		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, cfg.IncludeNames),
@@ -56,17 +56,17 @@ func NewShrunker(cfg *Config) *Shrunker {
 	}
 }
 
-func (sh *Shrunker) isExcludeName(name string) bool {
+func (sh *Shrinker) isExcludeName(name string) bool {
 	_, exists := sh.excludeNames[name]
 	return exists
 }
 
-func (sh *Shrunker) isDirToRemove(name string) bool {
+func (sh *Shrinker) isDirToRemove(name string) bool {
 	_, exists := sh.shrunkDirNames[name]
 	return exists
 }
 
-func (sh *Shrunker) isFileToRemove(name string) (exists bool) {
+func (sh *Shrinker) isFileToRemove(name string) (exists bool) {
 	if _, exists = sh.shrunkFileNames[name]; exists {
 		return
 	}
@@ -80,7 +80,7 @@ func (sh *Shrunker) isFileToRemove(name string) (exists bool) {
 	return
 }
 
-func (sh *Shrunker) cleaner(done func()) {
+func (sh *Shrinker) cleaner(done func()) {
 	var err error
 	var obj *removeObjInfo
 	var stat *FileStat
@@ -114,7 +114,7 @@ func (sh *Shrunker) cleaner(done func()) {
 	done()
 }
 
-func (sh *Shrunker) runCleaners() (err error) {
+func (sh *Shrinker) runCleaners() (err error) {
 	var wg sync.WaitGroup
 	wg.Add(sh.concurentLimit)
 	for i := 0; i < sh.concurentLimit; i++ {
@@ -125,7 +125,7 @@ func (sh *Shrunker) runCleaners() (err error) {
 	return nil
 }
 
-func (sh *Shrunker) runStatGrabber() chan FileStat {
+func (sh *Shrinker) runStatGrabber() chan FileStat {
 	resCh := make(chan FileStat)
 
 	go func(resCh chan FileStat) {
@@ -142,12 +142,12 @@ func (sh *Shrunker) runStatGrabber() chan FileStat {
 	return resCh
 }
 
-func (sh *Shrunker) Start() error {
+func (sh *Shrinker) Start() error {
 	return sh.start()
 }
 
 // TODO: add errors wrapping for correct handling errors
-func (sh *Shrunker) fileFilterCallback(osPathname string, de FileInfoI) error {
+func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
 	if sh.isExcludeName(de.Name()) {
 		return ExcludeError
 	}
@@ -169,7 +169,7 @@ func (sh *Shrunker) fileFilterCallback(osPathname string, de FileInfoI) error {
 	return NotProcessError
 }
 
-func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
+func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
 	// TODO: more informative logging about errors
 	if sh.verboseOutput {
 		fmt.Printf("ERROR: %s\n", err)
@@ -178,7 +178,7 @@ func (sh *Shrunker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 }
 
 // TODO: think how add progress bar
-func (sh *Shrunker) start() error {
+func (sh *Shrinker) start() error {
 	if !pathExists(sh.checkPath) {
 		if sh.verboseOutput {
 			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)

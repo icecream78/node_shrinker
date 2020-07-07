@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/icecream78/node_shrunker/fs"
-	"github.com/icecream78/node_shrunker/mocks"
+	"github.com/icecream78/node_shrinker/fs"
+	"github.com/icecream78/node_shrinker/mocks"
 
-	. "github.com/icecream78/node_shrunker/walker"
+	. "github.com/icecream78/node_shrinker/walker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +29,7 @@ func (w *walkerStub) Walk(filepath string, callback WalkFunc, errCallback WalkEr
 }
 
 func TestExcludeNameFunc(t *testing.T) {
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		ExcludeNames: []string{
 			"file",
 			"/a/b/c/file",
@@ -53,7 +53,7 @@ func TestExcludeNameFunc(t *testing.T) {
 }
 
 func TestRemoveDirNameFunc(t *testing.T) {
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		RemoveDirNames: []string{
 			"dirname",
 			"/a/b/c/dirname",
@@ -77,7 +77,7 @@ func TestRemoveDirNameFunc(t *testing.T) {
 }
 
 func TestRemoveFileNameFunc(t *testing.T) {
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		RemoveFileNames: []string{
 			"file",
 			"/a/b/c/file",
@@ -122,7 +122,7 @@ func TestStatGrabberFunc(t *testing.T) {
 		}, *fs.NewFileStat("result", "result", 2048, 2)},
 	}
 	for _, tc := range testCases {
-		sh := NewShrunker(&Config{})
+		sh := NewShrinker(&Config{})
 		resStatsCh := sh.runStatGrabber()
 		t.Run(tc.alias, func(t *testing.T) {
 			for _, file := range tc.input {
@@ -196,7 +196,7 @@ func TestFileFilterCallbakc(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		sh := NewShrunker(&Config{
+		sh := NewShrinker(&Config{
 			ExcludeNames: []string{
 				"file1",
 			},
@@ -249,7 +249,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		sh := NewShrunker(&Config{
+		sh := NewShrinker(&Config{
 			VerboseOutput: false,
 		})
 		t.Run(tc.alias, func(t *testing.T) {
@@ -261,7 +261,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 
 func TestCleanerEmptyInput(t *testing.T) {
 	assert := assert.New(t)
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -290,7 +290,7 @@ func TestCleanerBasicRemoveFile(t *testing.T) {
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -333,7 +333,7 @@ func TestCleanerBasicRemoveDirectory(t *testing.T) {
 	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
 	osMock.On("RemoveAll", "/dir1").Return(nil)
 
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -375,7 +375,7 @@ func TestCleanerStatFileWithError(t *testing.T) {
 
 	osMock.On("Stat", "/test2", false).Return(nil, errors.New("some error"))
 
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -413,7 +413,7 @@ func TestCleanerRemoveFileWithError(t *testing.T) {
 	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
-	sh := NewShrunker(&Config{
+	sh := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -468,7 +468,7 @@ func TestStartFunc(t *testing.T) {
 	osMock.On("Stat", "/here", false).Return(nil, os.ErrNotExist)
 
 	for _, tc := range testCases {
-		sh := NewShrunker(&Config{
+		sh := NewShrinker(&Config{
 			CheckPath: "/here",
 		})
 		t.Run(tc.alias, func(t *testing.T) {

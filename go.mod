@@ -1,4 +1,4 @@
-module github.com/icecream78/node_shrunker
+module github.com/icecream78/node_shrinker
 
 go 1.14
 

@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/icecream78/node_shrunker/fs"
+	"github.com/icecream78/node_shrinker/fs"
 
-	"github.com/icecream78/node_shrunker/mocks"
+	"github.com/icecream78/node_shrinker/mocks"
 
 	"github.com/stretchr/testify/assert"
 )
