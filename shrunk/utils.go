@@ -1,7 +1,9 @@
 package shrunk
 
 import (
+	"fmt"
 	"os"
+	"regexp"
 )
 
 func sliceToMap(sl ...[]string) map[string]struct{} {
@@ -45,4 +47,17 @@ func devidePatternsFromRegularNames(input []string) (patterns []string, regular 
 		}
 	}
 	return
+}
+
+func compileRegExpList(regExpList []string) []*regexp.Regexp {
+	regList := make([]*regexp.Regexp, 0)
+	for i := 0; i < len(regExpList); i++ {
+		cmp, err := regexp.Compile(regExpList[i])
+		if err != nil {
+			// TODO: write more proper errro handling
+			fmt.Println("skiping")
+		}
+		regList = append(regList, cmp)
+	}
+	return regList
 }

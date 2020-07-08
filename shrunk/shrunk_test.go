@@ -54,7 +54,7 @@ func TestExcludeNameFunc(t *testing.T) {
 
 func TestRemoveDirNameFunc(t *testing.T) {
 	sh := NewShrinker(&Config{
-		RemoveDirNames: []string{
+		IncludeNames: []string{
 			"dirname",
 			"/a/b/c/dirname",
 		},
@@ -78,7 +78,7 @@ func TestRemoveDirNameFunc(t *testing.T) {
 
 func TestRemoveFileNameFunc(t *testing.T) {
 	sh := NewShrinker(&Config{
-		RemoveFileNames: []string{
+		IncludeNames: []string{
 			"file",
 			"/a/b/c/file",
 		},
@@ -163,9 +163,17 @@ func TestFileFilterCallbakc(t *testing.T) {
 		err      error
 	}{
 		{
-			alias:    "Check excluded file",
+			alias:    "Check excluded file by regular name",
 			fullpath: "/file1",
 			input:    testFileInfo{name: "file1", isDir: false, isRegular: true},
+			want:     nil,
+			waitResp: false,
+			err:      ExcludeError,
+		},
+		{
+			alias:    "Check excluded file by regexp name",
+			fullpath: "/script.1.js",
+			input:    testFileInfo{name: "script.1.js", isDir: false, isRegular: true},
 			want:     nil,
 			waitResp: false,
 			err:      ExcludeError,
@@ -176,7 +184,7 @@ func TestFileFilterCallbakc(t *testing.T) {
 			input:    testFileInfo{name: "file2", isDir: false, isRegular: true},
 			want:     &removeObjInfo{isDir: false, filename: "file2", fullpath: "/file2"},
 			waitResp: true,
-			err:      ExcludeError,
+			err:      nil,
 		},
 		{
 			alias:    "Check dir not removed",
@@ -199,12 +207,12 @@ func TestFileFilterCallbakc(t *testing.T) {
 		sh := NewShrinker(&Config{
 			ExcludeNames: []string{
 				"file1",
+				"sc*",
 			},
-			RemoveDirNames: []string{
+			IncludeNames: []string{
 				"dirname1",
-			},
-			RemoveFileNames: []string{
 				"file2",
+				"s*",
 			},
 		})
 		t.Run(tc.alias, func(t *testing.T) {

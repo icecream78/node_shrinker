@@ -13,6 +13,7 @@ var checkPath string
 var verbose bool
 var excludeNames []string
 var includeNames []string
+var includeExtensions []string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -27,12 +28,11 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: move Shrinker configuring with builder
 		err := shrunk.NewShrinker(&shrunk.Config{
-			CheckPath:       checkPath,
-			RemoveDirNames:  []string{},
-			RemoveFileNames: []string{},
-			VerboseOutput:   verbose,
-			ExcludeNames:    excludeNames,
-			IncludeNames:    includeNames,
+			CheckPath:     checkPath,
+			VerboseOutput: verbose,
+			ExcludeNames:  excludeNames,
+			IncludeNames:  includeNames,
+			RemoveFileExt: includeExtensions,
 		}).Start()
 		if err != nil {
 			fmt.Printf("Someghing broken=) %v\n", err)
@@ -49,8 +49,9 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&checkPath, "dir", "d", "", "path to directory where need cleanup")
-	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "List of files/directories that should not be removed. Flag can be specified multiple times")
-	rootCmd.PersistentFlags().StringSliceVarP(&includeNames, "include", "i", []string{}, "List of files/directories that should be included in remove list. Flag can be specified multiple times")
+	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "List of files/directories that should not be removed. Flag can be specified multiple times. Support regular expression syntax")
+	rootCmd.PersistentFlags().StringSliceVarP(&includeNames, "include", "i", []string{}, "List of files/directories that should be included in remove list. Flag can be specified multiple times. Support regular expression syntax")
+	rootCmd.PersistentFlags().StringSliceVarP(&includeExtensions, "ext", "x", []string{}, "List of file extensions that should be removed. Flag can be specified multiple times")
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "more detailed output")
 }
