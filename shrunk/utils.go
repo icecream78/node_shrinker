@@ -23,28 +23,24 @@ func pathExists(path string) bool {
 	return true
 }
 
+func isStringPattern(input string) bool {
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '*', '?', '[', ']', '\\', '_', '-', '^', '$':
+			return true
+		}
+	}
+	return false
+}
+
 func devidePatternsFromRegularNames(input []string) (patterns []string, regular []string) {
 	patterns = make([]string, 0)
 	regular = make([]string, 0)
 	for _, in := range input {
-		isPatterns := false
-		for _, c := range in {
-			switch c {
-			case '*':
-			case '?':
-			case '[':
-			case ']':
-			case '\\':
-			case '_':
-			case '-':
-			case '^':
-			case '$':
-				isPatterns = true
-				patterns = append(patterns, in)
-				break
-			}
-		}
-		if !isPatterns {
+		isPattern := isStringPattern(in)
+		if isPattern {
+			patterns = append(patterns, in)
+		} else {
 			regular = append(regular, in)
 		}
 	}
