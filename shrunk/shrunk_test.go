@@ -153,6 +153,32 @@ func (tfi testFileInfo) IsRegular() bool {
 	return tfi.isRegular
 }
 
+func TestFileFilterExcludeByName(t *testing.T) {
+	sh := NewShrinker(&Config{
+		ExcludeNames: []string{
+			"file1",
+		},
+		IncludeNames: []string{
+			"dirname1",
+		},
+	})
+
+	fileFullPath := "/file1"
+	input := testFileInfo{name: "file1", isDir: false, isRegular: true}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, ExcludeError, err)
+
+	close(sh.removeCh)
+	info, ok := <-sh.removeCh
+
+	expectedChannelCloseStatus := false
+	// expectedInfo := &removeObjInfo{}
+
+	assert.Equal(t, expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(t, nil, info)
+}
+
 func TestFileFilterCallbakc(t *testing.T) {
 	testCases := []struct {
 		alias    string
@@ -285,7 +311,6 @@ func TestCleanerEmptyInput(t *testing.T) {
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
 	assert.Equal(&expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
-	return
 }
 
 func TestCleanerBasicRemoveFile(t *testing.T) {
