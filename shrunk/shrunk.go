@@ -58,8 +58,8 @@ func NewShrinker(cfg *Config) *Shrinker {
 		excludeNames:       sliceToMap(regularExclude),
 		regExpIncludeNames: compileRegExpList(patternInclude),
 		regExpExcludeNames: compileRegExpList(patternExclude),
-		removeCh:           make(chan *removeObjInfo),
-		statsCh:            make(chan FileStat),
+		removeCh:           make(chan *removeObjInfo, concurentLimit),
+		statsCh:            make(chan FileStat, concurentLimit),
 		concurentLimit:     concurentLimit,
 	}
 }
