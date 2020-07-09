@@ -1,7 +1,9 @@
 package shrunk
 
 import (
+	"fmt"
 	"os"
+	"regexp"
 )
 
 func sliceToMap(sl ...[]string) map[string]struct{} {
@@ -21,4 +23,41 @@ func pathExists(path string) bool {
 		return false
 	}
 	return true
+}
+
+func isStringPattern(input string) bool {
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '*', '?', '[', ']', '\\', '_', '-', '^', '$':
+			return true
+		}
+	}
+	return false
+}
+
+func devidePatternsFromRegularNames(input []string) (patterns []string, regular []string) {
+	patterns = make([]string, 0)
+	regular = make([]string, 0)
+	for _, in := range input {
+		isPattern := isStringPattern(in)
+		if isPattern {
+			patterns = append(patterns, in)
+		} else {
+			regular = append(regular, in)
+		}
+	}
+	return
+}
+
+func compileRegExpList(regExpList []string) []*regexp.Regexp {
+	regList := make([]*regexp.Regexp, 0)
+	for i := 0; i < len(regExpList); i++ {
+		cmp, err := regexp.Compile(regExpList[i])
+		if err != nil {
+			// TODO: write more proper errro handling
+			fmt.Println("skiping")
+		}
+		regList = append(regList, cmp)
+	}
+	return regList
 }

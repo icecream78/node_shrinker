@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	. "github.com/icecream78/node_shrinker/fs"
@@ -21,15 +22,17 @@ type removeObjInfo struct {
 }
 
 type Shrinker struct {
-	verboseOutput   bool
-	concurentLimit  int
-	checkPath       string
-	shrunkDirNames  map[string]struct{}
-	shrunkFileNames map[string]struct{}
-	shrunkFileExt   map[string]struct{}
-	excludeNames    map[string]struct{}
-	removeCh        chan *removeObjInfo
-	statsCh         chan FileStat
+	verboseOutput      bool
+	concurentLimit     int
+	checkPath          string
+	shrunkDirNames     map[string]struct{}
+	shrunkFileNames    map[string]struct{}
+	shrunkFileExt      map[string]struct{}
+	excludeNames       map[string]struct{}
+	regExpIncludeNames []*regexp.Regexp
+	regExpExcludeNames []*regexp.Regexp
+	removeCh           chan *removeObjInfo
+	statsCh            chan FileStat
 }
 
 func NewShrinker(cfg *Config) *Shrinker {
@@ -43,22 +46,49 @@ func NewShrinker(cfg *Config) *Shrinker {
 		checkPath = filepath.Join(path, "node_modules")
 	}
 
+	patternInclude, regularInclude := devidePatternsFromRegularNames(cfg.IncludeNames)
+	patternExclude, regularExclude := devidePatternsFromRegularNames(cfg.ExcludeNames)
+
 	return &Shrinker{
-		verboseOutput:   cfg.VerboseOutput,
-		checkPath:       checkPath,
-		shrunkDirNames:  sliceToMap(DefaultRemoveDirNames, cfg.RemoveDirNames, cfg.IncludeNames),
-		shrunkFileNames: sliceToMap(DefaultRemoveFileNames, cfg.RemoveFileNames, cfg.IncludeNames),
-		shrunkFileExt:   sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
-		excludeNames:    sliceToMap(cfg.ExcludeNames),
-		removeCh:        make(chan *removeObjInfo),
-		statsCh:         make(chan FileStat),
-		concurentLimit:  concurentLimit,
+		verboseOutput:      cfg.VerboseOutput,
+		checkPath:          checkPath,
+		shrunkDirNames:     sliceToMap(DefaultRemoveDirNames, regularInclude),
+		shrunkFileNames:    sliceToMap(DefaultRemoveFileNames, regularInclude),
+		shrunkFileExt:      sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
+		excludeNames:       sliceToMap(regularExclude),
+		regExpIncludeNames: compileRegExpList(patternInclude),
+		regExpExcludeNames: compileRegExpList(patternExclude),
+		removeCh:           make(chan *removeObjInfo, concurentLimit),
+		statsCh:            make(chan FileStat, concurentLimit),
+		concurentLimit:     concurentLimit,
 	}
 }
 
 func (sh *Shrinker) isExcludeName(name string) bool {
 	_, exists := sh.excludeNames[name]
-	return exists
+	if exists {
+		return true
+	}
+
+	for _, pattern := range sh.regExpExcludeNames {
+		matched := pattern.MatchString(name)
+		if matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (sh *Shrinker) isIncludeName(name string) bool {
+	// return false
+	for _, pattern := range sh.regExpIncludeNames {
+		matched := pattern.MatchString(name)
+		if matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (sh *Shrinker) isDirToRemove(name string) bool {
@@ -152,7 +182,14 @@ func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
 		return ExcludeError
 	}
 
-	if de.IsDir() && sh.isDirToRemove(de.Name()) {
+	if sh.isIncludeName(de.Name()) {
+		sh.removeCh <- &removeObjInfo{
+			isDir:    de.IsDir(),
+			filename: de.Name(),
+			fullpath: osPathname,
+		}
+		return nil
+	} else if de.IsDir() && sh.isDirToRemove(de.Name()) {
 		sh.removeCh <- &removeObjInfo{
 			isDir:    de.IsDir(),
 			filename: de.Name(),
@@ -165,6 +202,7 @@ func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
 			filename: de.Name(),
 			fullpath: osPathname,
 		}
+		return nil
 	}
 	return NotProcessError
 }

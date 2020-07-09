@@ -54,7 +54,7 @@ func TestExcludeNameFunc(t *testing.T) {
 
 func TestRemoveDirNameFunc(t *testing.T) {
 	sh := NewShrinker(&Config{
-		RemoveDirNames: []string{
+		IncludeNames: []string{
 			"dirname",
 			"/a/b/c/dirname",
 		},
@@ -78,7 +78,7 @@ func TestRemoveDirNameFunc(t *testing.T) {
 
 func TestRemoveFileNameFunc(t *testing.T) {
 	sh := NewShrinker(&Config{
-		RemoveFileNames: []string{
+		IncludeNames: []string{
 			"file",
 			"/a/b/c/file",
 		},
@@ -153,84 +153,149 @@ func (tfi testFileInfo) IsRegular() bool {
 	return tfi.isRegular
 }
 
-func TestFileFilterCallbakc(t *testing.T) {
-	testCases := []struct {
-		alias    string
-		fullpath string
-		input    testFileInfo
-		want     *removeObjInfo
-		waitResp bool
-		err      error
-	}{
-		{
-			alias:    "Check excluded file",
-			fullpath: "/file1",
-			input:    testFileInfo{name: "file1", isDir: false, isRegular: true},
-			want:     nil,
-			waitResp: false,
-			err:      ExcludeError,
+func TestFileFilterExcludeByName(t *testing.T) {
+	sh := NewShrinker(&Config{
+		ExcludeNames: []string{
+			"file1",
 		},
-		{
-			alias:    "Check file remove",
-			fullpath: "/file2",
-			input:    testFileInfo{name: "file2", isDir: false, isRegular: true},
-			want:     &removeObjInfo{isDir: false, filename: "file2", fullpath: "/file2"},
-			waitResp: true,
-			err:      ExcludeError,
+		IncludeNames: []string{
+			"dirname1",
 		},
-		{
-			alias:    "Check dir not removed",
-			fullpath: "/dirname",
-			input:    testFileInfo{name: "dirname", isDir: true, isRegular: false},
-			want:     &removeObjInfo{isDir: true, filename: "dirname", fullpath: "/dirname"},
-			waitResp: false,
-			err:      NotProcessError,
-		},
-		{
-			alias:    "Check dirname remove",
-			fullpath: "/dirname1",
-			input:    testFileInfo{name: "dirname1", isDir: true, isRegular: false},
-			want:     &removeObjInfo{isDir: true, filename: "dirname1", fullpath: "/dirname1"},
-			waitResp: true,
-			err:      SkipDirError,
-		},
-	}
-	for _, tc := range testCases {
-		sh := NewShrinker(&Config{
-			ExcludeNames: []string{
-				"file1",
-			},
-			RemoveDirNames: []string{
-				"dirname1",
-			},
-			RemoveFileNames: []string{
-				"file2",
-			},
-		})
-		t.Run(tc.alias, func(t *testing.T) {
-			if tc.waitResp {
-				go func() {
-					info := <-sh.removeCh
-					assert.Equal(t, tc.want, info, fmt.Sprintf("Input: %v", tc.input))
-				}()
-			}
+	})
 
-			err := sh.fileFilterCallback(tc.fullpath, testFileInfo{
-				name:      tc.input.name,
-				isDir:     tc.input.isDir,
-				isRegular: tc.input.isRegular,
-			})
-			if err != nil {
-				if tc.err != nil {
-					// normal case
-					return
-				} else {
-					t.Errorf("Not correct")
-					return
-				}
-			}
-		})
-	}
+	fileFullPath := "/file1"
+	input := testFileInfo{name: "file1", isDir: false, isRegular: true}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, ExcludeError, err)
+
+	close(sh.removeCh)
+	info, ok := <-sh.removeCh
+
+	expectedChannelCloseStatus := false
+	var expectedInfo *removeObjInfo = nil
+
+	assert.Equal(t, expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(t, expectedInfo, info)
+}
+
+func TestFileFilterIncludeByName(t *testing.T) {
+	sh := NewShrinker(&Config{
+		IncludeNames: []string{
+			"file1",
+		},
+	})
+
+	fileFullPath := "/file1"
+	input := testFileInfo{name: "file1", isDir: false, isRegular: true}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, nil, err)
+
+	close(sh.removeCh)
+	info := <-sh.removeCh
+
+	expectedChannelCloseStatus := false
+	expectedInfo := &removeObjInfo{filename: "file1", fullpath: "/file1", isDir: false}
+	assert.Equal(t, expectedInfo, info)
+
+	_, ok := <-sh.removeCh
+	assert.Equal(t, expectedChannelCloseStatus, ok, "channel is not closed")
+}
+
+func TestFileFilterExcludeByRegexp(t *testing.T) {
+	sh := NewShrinker(&Config{
+		ExcludeNames: []string{
+			"file1",
+			"sc*",
+		},
+		IncludeNames: []string{
+			"dirname1",
+		},
+	})
+
+	fileFullPath := "/script.1.js"
+	input := testFileInfo{name: "script.1.js", isDir: false, isRegular: true}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, ExcludeError, err)
+
+	close(sh.removeCh)
+	info, ok := <-sh.removeCh
+
+	expectedChannelCloseStatus := false
+	var expectedInfo *removeObjInfo = nil
+
+	assert.Equal(t, expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(t, expectedInfo, info)
+}
+
+func TestFileFilterIncludeByRegexp(t *testing.T) {
+	sh := NewShrinker(&Config{
+		IncludeNames: []string{
+			"dirname1",
+			"f*",
+		},
+	})
+
+	fileFullPath := "/file2.ts"
+	input := testFileInfo{name: "file2.ts", isDir: false, isRegular: true}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, nil, err)
+
+	info := <-sh.removeCh
+	close(sh.removeCh)
+
+	expectedChannelCloseStatus := false
+	expectedInfo := &removeObjInfo{isDir: false, filename: "file2.ts", fullpath: "/file2.ts"}
+	assert.Equal(t, expectedInfo, info)
+
+	_, ok := <-sh.removeCh
+	assert.Equal(t, expectedChannelCloseStatus, ok, "is channel closed")
+}
+
+func TestFileFilterNotProcessDir(t *testing.T) {
+	sh := NewShrinker(&Config{})
+
+	fileFullPath := "/dirname1"
+	input := testFileInfo{name: "dirname1", isDir: true, isRegular: false}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, NotProcessError, err)
+
+	close(sh.removeCh)
+	info, ok := <-sh.removeCh
+
+	expectedChannelCloseStatus := false
+	var expectedInfo *removeObjInfo = nil
+
+	assert.Equal(t, expectedChannelCloseStatus, ok, "is channel closed")
+	assert.Equal(t, expectedInfo, info)
+}
+
+func TestFileFilterRemoveDir(t *testing.T) {
+	sh := NewShrinker(&Config{
+		IncludeNames: []string{
+			"dirname1",
+		},
+	})
+
+	fileFullPath := "/dirname1"
+	input := testFileInfo{name: "dirname1", isDir: true, isRegular: false}
+
+	err := sh.fileFilterCallback(fileFullPath, input)
+	assert.Equal(t, SkipDirError, err) // for app logic
+
+	close(sh.removeCh)
+	info := <-sh.removeCh
+
+	expectedInfo := &removeObjInfo{isDir: true, filename: "dirname1", fullpath: "/dirname1"}
+	assert.Equal(t, expectedInfo, info)
+
+	_, ok := <-sh.removeCh
+	expectedChannelCloseStatus := false
+	assert.Equal(t, expectedChannelCloseStatus, ok, "channel is not closed")
 }
 
 func TestFileFilterErrCallbakc(t *testing.T) {
@@ -277,7 +342,6 @@ func TestCleanerEmptyInput(t *testing.T) {
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
 	assert.Equal(&expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
-	return
 }
 
 func TestCleanerBasicRemoveFile(t *testing.T) {
