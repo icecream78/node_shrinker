@@ -9,8 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var dryRun bool
+var verboseOutput bool
 var checkPath string
-var verbose bool
 var excludeNames []string
 var includeNames []string
 var includeExtensions []string
@@ -29,10 +30,11 @@ to quickly create a Cobra application.`,
 		// TODO: move Shrinker configuring with builder
 		err := shrunk.NewShrinker(&shrunk.Config{
 			CheckPath:     checkPath,
-			VerboseOutput: verbose,
+			VerboseOutput: verboseOutput,
 			ExcludeNames:  excludeNames,
 			IncludeNames:  includeNames,
 			RemoveFileExt: includeExtensions,
+			DryRun:        dryRun,
 		}).Start()
 		if err != nil {
 			fmt.Printf("Someghing broken=) %v\n", err)
@@ -49,9 +51,10 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&checkPath, "dir", "d", "", "path to directory where need cleanup")
-	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "List of files/directories that should not be removed. Flag can be specified multiple times. Support regular expression syntax")
-	rootCmd.PersistentFlags().StringSliceVarP(&includeNames, "include", "i", []string{}, "List of files/directories that should be included in remove list. Flag can be specified multiple times. Support regular expression syntax")
-	rootCmd.PersistentFlags().StringSliceVarP(&includeExtensions, "ext", "x", []string{}, "List of file extensions that should be removed. Flag can be specified multiple times")
+	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "list of files/directories that should not be removed. Flag can be specified multiple times. Support regular expression syntax")
+	rootCmd.PersistentFlags().StringSliceVarP(&includeNames, "include", "i", []string{}, "list of files/directories that should be included in remove list. Flag can be specified multiple times. Support regular expression syntax")
+	rootCmd.PersistentFlags().StringSliceVarP(&includeExtensions, "ext", "x", []string{}, "list of file extensions that should be removed. Flag can be specified multiple times")
 
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "more detailed output")
+	rootCmd.PersistentFlags().BoolVarP(&verboseOutput, "verbose", "v", false, "more detailed output")
+	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "display what files will be removed")
 }

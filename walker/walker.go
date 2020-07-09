@@ -27,15 +27,16 @@ type Walker interface {
 }
 
 type dirWalker struct {
+	keepOrder bool
 }
 
-func NewDirWalker() *dirWalker {
-	return &dirWalker{}
+func NewDirWalker(keepOrder bool) *dirWalker {
+	return &dirWalker{keepOrder}
 }
 
 func (dw *dirWalker) Walk(filepath string, callback WalkFunc, errCallback WalkErrFunc) error {
 	err := godirwalk.Walk(filepath, &godirwalk.Options{
-		Unsorted: true, // for higher speed walking dir tree
+		Unsorted: !dw.keepOrder, // for higher speed walking dir tree
 		Callback: func(osPathname string, de *godirwalk.Dirent) error {
 			err := callback(osPathname, NewFileInfoFromDe(de))
 

@@ -31,16 +31,21 @@ func (fs *fsClass) Stat(filepath string, recursive bool) (*FileStat, error) {
 	}
 
 	return &FileStat{
-		filename: stat.Name(),
-		fullpath: filepath,
-		size:     stat.Size(),
+		filename:   stat.Name(),
+		fullpath:   filepath,
+		size:       stat.Size(),
+		filesCount: 1,
 	}, nil
 }
 
 func (fs *fsClass) getRecursiveStat(filepath string) (*FileStat, error) {
 	stats := FileStat{filename: filepath, fullpath: filepath}
-	err := NewDirWalker().Walk(filepath, func(path string, de FileInfoI) error {
-		st, stErr := fs.Stat(filepath, de.IsDir())
+	err := NewDirWalker(false).Walk(filepath, func(path string, de FileInfoI) error {
+		if filepath == path {
+			return nil // skip for non recursive work
+		}
+
+		st, stErr := fs.Stat(path, de.IsDir())
 		if stErr != nil {
 			// cannnot get stat from file, so we cannot remove it and not count this file in result stats
 			return nil
