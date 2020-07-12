@@ -13,7 +13,7 @@ import (
 )
 
 var fsManager FS = NewFS() // for test purposes
-var walker Walker = NewDirWalker()
+var walker Walker
 
 type removeObjInfo struct {
 	isDir    bool
@@ -23,6 +23,7 @@ type removeObjInfo struct {
 
 type Shrinker struct {
 	verboseOutput      bool
+	dryRun             bool
 	concurentLimit     int
 	checkPath          string
 	shrunkDirNames     map[string]struct{}
@@ -38,7 +39,7 @@ type Shrinker struct {
 func NewShrinker(cfg *Config) *Shrinker {
 	concurentLimit := cfg.ConcurentLimit
 	if concurentLimit == 0 {
-		concurentLimit = 4
+		concurentLimit = 1
 	}
 	checkPath := cfg.CheckPath
 	if checkPath == "" {
@@ -49,8 +50,11 @@ func NewShrinker(cfg *Config) *Shrinker {
 	patternInclude, regularInclude := devidePatternsFromRegularNames(cfg.IncludeNames)
 	patternExclude, regularExclude := devidePatternsFromRegularNames(cfg.ExcludeNames)
 
+	walker = NewDirWalker(cfg.DryRun)
+
 	return &Shrinker{
 		verboseOutput:      cfg.VerboseOutput,
+		dryRun:             cfg.DryRun,
 		checkPath:          checkPath,
 		shrunkDirNames:     sliceToMap(DefaultRemoveDirNames, regularInclude),
 		shrunkFileNames:    sliceToMap(DefaultRemoveFileNames, regularInclude),
@@ -108,6 +112,44 @@ func (sh *Shrinker) isFileToRemove(name string) (exists bool) {
 		return
 	}
 	return
+}
+
+func (sh *Shrinker) printer(done func()) {
+	var err error
+	var obj *removeObjInfo
+	var stat *FileStat
+
+	for obj = range sh.removeCh {
+		fmt.Printf("not removing: %s\n", obj.fullpath)
+		stat = &FileStat{}
+
+		if obj.isDir {
+			stat, err = fsManager.Stat(obj.fullpath, true)
+		} else {
+			stat, err = fsManager.Stat(obj.fullpath, false)
+		}
+
+		if err != nil {
+			if sh.verboseOutput {
+				fmt.Printf("ERROR: %s\n", err)
+			}
+			continue
+		}
+
+		sh.statsCh <- *stat
+	}
+	done()
+}
+
+func (sh *Shrinker) runPrinter() (err error) {
+	var wg sync.WaitGroup
+	wg.Add(sh.concurentLimit)
+	for i := 0; i < sh.concurentLimit; i++ {
+		go sh.printer(wg.Done)
+	}
+	wg.Wait()
+	close(sh.statsCh)
+	return nil
 }
 
 func (sh *Shrinker) cleaner(done func()) {
@@ -182,26 +224,20 @@ func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
 		return ExcludeError
 	}
 
+	ff := &removeObjInfo{
+		isDir:    de.IsDir(),
+		filename: de.Name(),
+		fullpath: osPathname,
+	}
+
 	if sh.isIncludeName(de.Name()) {
-		sh.removeCh <- &removeObjInfo{
-			isDir:    de.IsDir(),
-			filename: de.Name(),
-			fullpath: osPathname,
-		}
+		sh.removeCh <- ff
 		return nil
 	} else if de.IsDir() && sh.isDirToRemove(de.Name()) {
-		sh.removeCh <- &removeObjInfo{
-			isDir:    de.IsDir(),
-			filename: de.Name(),
-			fullpath: osPathname,
-		}
+		sh.removeCh <- ff
 		return SkipDirError
 	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
-		sh.removeCh <- &removeObjInfo{
-			isDir:    de.IsDir(),
-			filename: de.Name(),
-			fullpath: osPathname,
-		}
+		sh.removeCh <- ff
 		return nil
 	}
 	return NotProcessError
@@ -224,7 +260,12 @@ func (sh *Shrinker) start() error {
 		return errors.New("path doesn`t exist")
 	}
 
-	go sh.runCleaners()
+	if sh.dryRun {
+		go sh.runPrinter()
+	} else {
+		go sh.runCleaners()
+	}
+
 	statsCh := sh.runStatGrabber()
 
 	fmt.Printf("Start checking directory %s\n", sh.checkPath)
