@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/icecream78/node_shrinker/shrunk"
-
+	shrunk "github.com/icecream78/node_shrinker/shrink"
 	"github.com/spf13/cobra"
 )
 
