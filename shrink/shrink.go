@@ -245,6 +245,10 @@ func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
 
 func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
 	// TODO: more informative logging about errors
+	if err == SkipDirError {
+		return SkipNode
+	}
+
 	if sh.verboseOutput {
 		fmt.Printf("ERROR: %s\n", err)
 	}
