@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sync"
@@ -11,6 +12,8 @@ import (
 	. "github.com/icecream78/node_shrinker/fs"
 	. "github.com/icecream78/node_shrinker/walker"
 )
+
+const NodeModulesDirname = "node_modules"
 
 var fsManager FS = NewFS() // for test purposes
 var walker Walker
@@ -41,10 +44,17 @@ func NewShrinker(cfg *Config) *Shrinker {
 	if concurentLimit == 0 {
 		concurentLimit = 1
 	}
-	checkPath := cfg.CheckPath
+	var checkPath string
+
 	if checkPath == "" {
 		path, _ := fsManager.Getwd()
-		checkPath = filepath.Join(path, "node_modules")
+		checkPath = filepath.Join(path, NodeModulesDirname)
+	} else if path.Base(checkPath) != NodeModulesDirname {
+		if pathExists(filepath.Join(checkPath, NodeModulesDirname)) {
+			checkPath = filepath.Join(checkPath, NodeModulesDirname)
+		} else {
+			checkPath = cfg.CheckPath
+		}
 	}
 
 	patternInclude, regularInclude := devidePatternsFromRegularNames(cfg.IncludeNames)
