@@ -36,7 +36,7 @@ to quickly create a Cobra application.`,
 			DryRun:        dryRun,
 		}).Start()
 		if err != nil {
-			fmt.Printf("Someghing broken=) %v\n", err)
+			fmt.Printf("Something has broken=) %v\n", err)
 		}
 	},
 }
