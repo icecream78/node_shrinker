@@ -46,12 +46,12 @@ func NewShrinker(cfg *Config) *Shrinker {
 	}
 	var checkPath string
 
-	if checkPath == "" {
+	if cfg.CheckPath == "" {
 		path, _ := fsManager.Getwd()
 		checkPath = filepath.Join(path, NodeModulesDirname)
-	} else if path.Base(checkPath) != NodeModulesDirname {
+	} else if path.Base(cfg.CheckPath) != NodeModulesDirname {
 		if pathExists(filepath.Join(checkPath, NodeModulesDirname)) {
-			checkPath = filepath.Join(checkPath, NodeModulesDirname)
+			checkPath = filepath.Join(cfg.CheckPath, NodeModulesDirname)
 		} else {
 			checkPath = cfg.CheckPath
 		}
