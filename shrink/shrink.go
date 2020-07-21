@@ -225,7 +225,18 @@ func (sh *Shrinker) runStatGrabber() chan FileStat {
 }
 
 func (sh *Shrinker) Start() error {
-	return sh.start()
+	if !pathExists(sh.checkPath) {
+		if sh.verboseOutput {
+			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
+		}
+		return errors.New("path doesn`t exist")
+	}
+
+	if sh.dryRun {
+		return sh.startPrinter()
+	}
+
+	return sh.startCleaner()
 }
 
 // TODO: add errors wrapping for correct handling errors
@@ -265,20 +276,13 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-// TODO: think how add progress bar
-func (sh *Shrinker) start() error {
-	if !pathExists(sh.checkPath) {
-		if sh.verboseOutput {
-			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
-		}
-		return errors.New("path doesn`t exist")
-	}
+func (sh *Shrinker) startPrinter() error {
+	go sh.runPrinter()
+	return nil
+}
 
-	if sh.dryRun {
-		go sh.runPrinter()
-	} else {
-		go sh.runCleaners()
-	}
+func (sh *Shrinker) startCleaner() error {
+	go sh.runCleaners()
 
 	statsCh := sh.runStatGrabber()
 
