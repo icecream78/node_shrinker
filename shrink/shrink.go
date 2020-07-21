@@ -3,6 +3,8 @@ package shrunk
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +16,11 @@ import (
 )
 
 const NodeModulesDirname = "node_modules"
+const (
+	progressChar = "├───"
+	lastChar     = "└───"
+	tabChar      = "	"
+)
 
 var fsManager FS = NewFS() // for test purposes
 var walker Walker
@@ -276,9 +283,48 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-func (sh *Shrinker) startPrinter() error {
-	go sh.runPrinter()
+func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
+	files, err := ioutil.ReadDir(checkPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i, file := range files {
+		var tabToAdd string = ""
+		var tabToPass string = ""
+
+		if i == len(files) {
+			tabToAdd = lastChar
+			tabToPass = " " + tabChar
+		} else {
+			tabToAdd = progressChar
+			tabToPass = "│" + tabChar
+		}
+
+		tabToPass = tabPassed + tabToPass
+
+		if file.IsDir() {
+			logLine := fmt.Sprintf("%v%v%v\n", tabPassed, tabToAdd, file.Name())
+			fmt.Println(logLine)
+
+			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
+			sh.pp(nextDirPath, tabToPass)
+		} else {
+			var fileSize string
+			if file.Size() != 0 {
+				fileSize = fmt.Sprintf("%vb", file.Size())
+			} else {
+				fileSize = "(empty)"
+			}
+			logLine := fmt.Sprintf("%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), fileSize)
+			fmt.Println(logLine)
+		}
+	}
+
 	return nil
+}
+
+func (sh *Shrinker) startPrinter() error {
+	return sh.pp(sh.checkPath, "")
 }
 
 func (sh *Shrinker) startCleaner() error {
