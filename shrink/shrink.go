@@ -3,12 +3,11 @@ package shrunk
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 
 	. "github.com/icecream78/node_shrinker/fs"
@@ -283,48 +282,117 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
-	files, err := ioutil.ReadDir(checkPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for i, file := range files {
-		var tabToAdd string = ""
-		var tabToPass string = ""
+type tmpStruct struct {
+	tab      string
+	tabToAdd string
+	filename string
+	isDir    bool
+	space    int
+}
 
-		if i == len(files) {
+func (sh *Shrinker) layoutPrinter(done func()) {
+	var workspacePath []string = make([]string, 0)
+	var isLast bool = false
+	var tabToAdd string = ""
+	var lastPrintLine *tmpStruct
+
+	for removeObjInfo := range sh.removeCh {
+		fullPath := strings.ReplaceAll(removeObjInfo.fullpath, sh.checkPath, "")
+		isLast = false
+
+		currentPath := strings.Split(fullPath, "/")[1:]
+		if len(currentPath) >= len(workspacePath) {
+			workspacePath = currentPath[0:]
+		} else {
+			for i := 0; i < len(workspacePath); i++ {
+				if workspacePath[i] != currentPath[i] {
+					workspacePath = currentPath[0 : i+1]
+					isLast = true
+					break
+				}
+			}
+		}
+
+		if isLast {
 			tabToAdd = lastChar
-			tabToPass = " " + tabChar
 		} else {
 			tabToAdd = progressChar
-			tabToPass = "│" + tabChar
 		}
 
-		tabToPass = tabPassed + tabToPass
-
-		if file.IsDir() {
-			logLine := fmt.Sprintf("%v%v%v\n", tabPassed, tabToAdd, file.Name())
-			fmt.Println(logLine)
-
-			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
-			sh.pp(nextDirPath, tabToPass)
+		tab := strings.Repeat("│"+tabChar, len(workspacePath))
+		if removeObjInfo.isDir {
+			if lastPrintLine != nil {
+				logLine := fmt.Sprintf("%v%v%v\n", lastPrintLine.tab, tabToAdd, lastPrintLine.filename)
+				fmt.Println(logLine)
+			}
+			lastPrintLine = &tmpStruct{
+				filename: removeObjInfo.filename,
+				isDir:    true,
+				space:    0,
+				tab:      tab,
+				tabToAdd: tabToAdd,
+			}
 		} else {
 			var fileSize string
-			if file.Size() != 0 {
-				fileSize = fmt.Sprintf("%vb", file.Size())
-			} else {
-				fileSize = "(empty)"
+			stat, err := fsManager.Stat(removeObjInfo.fullpath, false)
+			if err != nil {
+				fmt.Println(err)
+				continue
 			}
-			logLine := fmt.Sprintf("%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), fileSize)
+			if lastPrintLine.space != 0 {
+				fileSize = fmt.Sprintf("%vb", lastPrintLine.space)
+			} else {
+				fileSize = "empty"
+			}
+			if lastPrintLine != nil {
+				logLine := fmt.Sprintf("%v%v%v (%v)\n", lastPrintLine.tab, tabToAdd, lastPrintLine.filename, fileSize)
+				fmt.Println(logLine)
+			}
+			lastPrintLine = &tmpStruct{
+				filename: removeObjInfo.filename,
+				isDir:    false,
+				space:    int(stat.Size()),
+				tab:      tab,
+				tabToAdd: tabToAdd,
+			}
+		}
+	}
+	if lastPrintLine != nil {
+		var fileSize string
+		if lastPrintLine.isDir {
+			logLine := fmt.Sprintf("%v%v%v\n", lastPrintLine.tab, tabToAdd, lastPrintLine.filename)
+			fmt.Println(logLine)
+		} else {
+			if lastPrintLine.space != 0 {
+				fileSize = fmt.Sprintf("%vb", lastPrintLine.space)
+			} else {
+				fileSize = "empty"
+			}
+			logLine := fmt.Sprintf("%v%v%v (%v)\n", lastPrintLine.tab, tabToAdd, lastPrintLine.filename, fileSize)
 			fmt.Println(logLine)
 		}
 	}
-
-	return nil
+	done()
 }
 
 func (sh *Shrinker) startPrinter() error {
-	return sh.pp(sh.checkPath, "")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// TODO: remove hardcode func
+	go sh.layoutPrinter(wg.Done)
+	_ = walker.Walk(sh.checkPath, func(osPathname string, de FileInfoI) error {
+		ff := &removeObjInfo{
+			isDir:    de.IsDir(),
+			filename: de.Name(),
+			fullpath: osPathname,
+		}
+
+		sh.removeCh <- ff
+		return nil
+	}, sh.fileFilterErrCallback)
+	close(sh.removeCh)
+	wg.Wait()
+	return nil
 }
 
 func (sh *Shrinker) startCleaner() error {
