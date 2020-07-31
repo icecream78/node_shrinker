@@ -312,6 +312,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 }
 
 func (sh *Shrinker) startPrinter() error {
+	fmt.Printf("%s\n\n", sh.checkPath)
 	return sh.layoutPrinter(sh.checkPath, "")
 }
 
