@@ -133,44 +133,6 @@ func (sh *Shrinker) isFileToRemove(name string) (exists bool) {
 	return
 }
 
-func (sh *Shrinker) printer(done func()) {
-	var err error
-	var obj *removeObjInfo
-	var stat *FileStat
-
-	for obj = range sh.removeCh {
-		fmt.Printf("not removing: %s\n", obj.fullpath)
-		stat = &FileStat{}
-
-		if obj.isDir {
-			stat, err = fsManager.Stat(obj.fullpath, true)
-		} else {
-			stat, err = fsManager.Stat(obj.fullpath, false)
-		}
-
-		if err != nil {
-			if sh.verboseOutput {
-				fmt.Printf("ERROR: %s\n", err)
-			}
-			continue
-		}
-
-		sh.statsCh <- *stat
-	}
-	done()
-}
-
-func (sh *Shrinker) runPrinter() (err error) {
-	var wg sync.WaitGroup
-	wg.Add(sh.concurentLimit)
-	for i := 0; i < sh.concurentLimit; i++ {
-		go sh.printer(wg.Done)
-	}
-	wg.Wait()
-	close(sh.statsCh)
-	return nil
-}
-
 func (sh *Shrinker) cleaner(done func()) {
 	var err error
 	var obj *removeObjInfo
@@ -292,7 +254,7 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
+func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 	files, err := ioutil.ReadDir(checkPath)
 	if err != nil {
 		log.Println(err)
@@ -333,7 +295,7 @@ func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
 			fmt.Println(logLine)
 
 			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
-			sh.pp(nextDirPath, tabToPass)
+			sh.layoutPrinter(nextDirPath, tabToPass)
 		} else {
 			var fileSize string
 			if file.Size() != 0 {
@@ -350,7 +312,7 @@ func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
 }
 
 func (sh *Shrinker) startPrinter() error {
-	return sh.pp(sh.checkPath, "")
+	return sh.layoutPrinter(sh.checkPath, "")
 }
 
 func (sh *Shrinker) startCleaner() error {
