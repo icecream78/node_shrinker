@@ -56,7 +56,9 @@ func NewShrinker(cfg *Config) *Shrinker {
 	if cfg.CheckPath == "" {
 		path, _ := fsManager.Getwd()
 		checkPath = filepath.Join(path, NodeModulesDirname)
-	} else if path.Base(cfg.CheckPath) != NodeModulesDirname {
+	} else if path.Base(cfg.CheckPath) == NodeModulesDirname {
+		checkPath = cfg.CheckPath
+	} else {
 		if pathExists(filepath.Join(checkPath, NodeModulesDirname)) {
 			checkPath = filepath.Join(cfg.CheckPath, NodeModulesDirname)
 		} else {
@@ -293,22 +295,23 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
 	files, err := ioutil.ReadDir(checkPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
-	filteredFiles := make([]os.FileInfo, 0)
+	filteredFiles := make([]string, 0)
 	for _, file := range files {
 		isProcess, _ := sh.checkIsFileToProcess(NewFileInfoFromOsFile(file))
 		if isProcess {
-			filteredFiles = append(filteredFiles, file)
+			filteredFiles = append(filteredFiles, file.Name())
 		}
 	}
+	processedFiles := sliceToMap(filteredFiles)
 
-	for i, file := range filteredFiles {
+	for i, file := range files {
 		var tabToAdd string = ""
 		var tabToPass string = ""
 
-		if i == len(filteredFiles)-1 {
+		if i == len(files)-1 {
 			tabToAdd = lastChar
 			tabToPass = " " + tabChar
 		} else {
@@ -318,8 +321,15 @@ func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
 
 		tabToPass = tabPassed + tabToPass
 
+		var printChar string
+		_, isFileInProcess := processedFiles[file.Name()]
+		if isFileInProcess {
+			printChar = "✓"
+		} else {
+			printChar = "✗"
+		}
 		if file.IsDir() {
-			logLine := fmt.Sprintf("%v%v%v\n", tabPassed, tabToAdd, file.Name())
+			logLine := fmt.Sprintf("%v%v%v%v\n", tabPassed, tabToAdd, file.Name(), printChar)
 			fmt.Println(logLine)
 
 			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
@@ -331,7 +341,7 @@ func (sh *Shrinker) pp(checkPath string, tabPassed string) error {
 			} else {
 				fileSize = "empty"
 			}
-			logLine := fmt.Sprintf("%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), fileSize)
+			logLine := fmt.Sprintf("%v%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), printChar, fileSize)
 			fmt.Println(logLine)
 		}
 	}
