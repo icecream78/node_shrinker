@@ -3,6 +3,8 @@ package shrunk
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +16,11 @@ import (
 )
 
 const NodeModulesDirname = "node_modules"
+const (
+	progressChar = "├───"
+	lastChar     = "└───"
+	tabChar      = "	"
+)
 
 var fsManager FS = NewFS() // for test purposes
 var walker Walker
@@ -46,12 +53,14 @@ func NewShrinker(cfg *Config) *Shrinker {
 	}
 	var checkPath string
 
-	if checkPath == "" {
+	if cfg.CheckPath == "" {
 		path, _ := fsManager.Getwd()
 		checkPath = filepath.Join(path, NodeModulesDirname)
-	} else if path.Base(checkPath) != NodeModulesDirname {
+	} else if path.Base(cfg.CheckPath) == NodeModulesDirname {
+		checkPath = cfg.CheckPath
+	} else {
 		if pathExists(filepath.Join(checkPath, NodeModulesDirname)) {
-			checkPath = filepath.Join(checkPath, NodeModulesDirname)
+			checkPath = filepath.Join(cfg.CheckPath, NodeModulesDirname)
 		} else {
 			checkPath = cfg.CheckPath
 		}
@@ -124,44 +133,6 @@ func (sh *Shrinker) isFileToRemove(name string) (exists bool) {
 	return
 }
 
-func (sh *Shrinker) printer(done func()) {
-	var err error
-	var obj *removeObjInfo
-	var stat *FileStat
-
-	for obj = range sh.removeCh {
-		fmt.Printf("not removing: %s\n", obj.fullpath)
-		stat = &FileStat{}
-
-		if obj.isDir {
-			stat, err = fsManager.Stat(obj.fullpath, true)
-		} else {
-			stat, err = fsManager.Stat(obj.fullpath, false)
-		}
-
-		if err != nil {
-			if sh.verboseOutput {
-				fmt.Printf("ERROR: %s\n", err)
-			}
-			continue
-		}
-
-		sh.statsCh <- *stat
-	}
-	done()
-}
-
-func (sh *Shrinker) runPrinter() (err error) {
-	var wg sync.WaitGroup
-	wg.Add(sh.concurentLimit)
-	for i := 0; i < sh.concurentLimit; i++ {
-		go sh.printer(wg.Done)
-	}
-	wg.Wait()
-	close(sh.statsCh)
-	return nil
-}
-
 func (sh *Shrinker) cleaner(done func()) {
 	var err error
 	var obj *removeObjInfo
@@ -225,32 +196,50 @@ func (sh *Shrinker) runStatGrabber() chan FileStat {
 }
 
 func (sh *Shrinker) Start() error {
-	return sh.start()
+	if !pathExists(sh.checkPath) {
+		if sh.verboseOutput {
+			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
+		}
+		return errors.New("path doesn`t exist")
+	}
+
+	if sh.dryRun {
+		return sh.startPrinter()
+	}
+
+	return sh.startCleaner()
+}
+
+func (sh *Shrinker) checkIsFileToProcess(de FileInfoI) (bool, error) {
+	if sh.isExcludeName(de.Name()) {
+		return false, ExcludeError
+	}
+
+	if sh.isIncludeName(de.Name()) {
+		return true, nil
+	} else if de.IsDir() && sh.isDirToRemove(de.Name()) {
+		return true, SkipDirError
+	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
+		return true, nil
+	}
+	return false, NotProcessError
 }
 
 // TODO: add errors wrapping for correct handling errors
 func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
-	if sh.isExcludeName(de.Name()) {
-		return ExcludeError
-	}
-
-	ff := &removeObjInfo{
-		isDir:    de.IsDir(),
-		filename: de.Name(),
-		fullpath: osPathname,
-	}
-
-	if sh.isIncludeName(de.Name()) {
+	isProcess, err := sh.checkIsFileToProcess(de)
+	if isProcess {
+		ff := &removeObjInfo{
+			isDir:    de.IsDir(),
+			filename: de.Name(),
+			fullpath: osPathname,
+		}
 		sh.removeCh <- ff
-		return nil
-	} else if de.IsDir() && sh.isDirToRemove(de.Name()) {
-		sh.removeCh <- ff
-		return SkipDirError
-	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
-		sh.removeCh <- ff
-		return nil
 	}
-	return NotProcessError
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
@@ -265,20 +254,70 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-// TODO: think how add progress bar
-func (sh *Shrinker) start() error {
-	if !pathExists(sh.checkPath) {
-		if sh.verboseOutput {
-			fmt.Printf("Path %s doesn`t exist\n", sh.checkPath)
-		}
-		return errors.New("path doesn`t exist")
+func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
+	files, err := ioutil.ReadDir(checkPath)
+	if err != nil {
+		log.Println(err)
 	}
 
-	if sh.dryRun {
-		go sh.runPrinter()
-	} else {
-		go sh.runCleaners()
+	filteredFiles := make([]string, 0)
+	for _, file := range files {
+		isProcess, _ := sh.checkIsFileToProcess(NewFileInfoFromOsFile(file))
+		if isProcess {
+			filteredFiles = append(filteredFiles, file.Name())
+		}
 	}
+	processedFiles := sliceToMap(filteredFiles)
+
+	for i, file := range files {
+		var tabToAdd string = ""
+		var tabToPass string = ""
+
+		if i == len(files)-1 {
+			tabToAdd = lastChar
+			tabToPass = " " + tabChar
+		} else {
+			tabToAdd = progressChar
+			tabToPass = "│" + tabChar
+		}
+
+		tabToPass = tabPassed + tabToPass
+
+		var printChar string
+		_, isFileInProcess := processedFiles[file.Name()]
+		if isFileInProcess {
+			printChar = "✓"
+		} else {
+			printChar = "✗"
+		}
+		if file.IsDir() {
+			logLine := fmt.Sprintf("%v%v%v%v\n", tabPassed, tabToAdd, file.Name(), printChar)
+			fmt.Println(logLine)
+
+			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
+			sh.layoutPrinter(nextDirPath, tabToPass)
+		} else {
+			var fileSize string
+			if file.Size() != 0 {
+				fileSize = fmt.Sprintf("%vb", file.Size())
+			} else {
+				fileSize = "empty"
+			}
+			logLine := fmt.Sprintf("%v%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), printChar, fileSize)
+			fmt.Println(logLine)
+		}
+	}
+
+	return nil
+}
+
+func (sh *Shrinker) startPrinter() error {
+	fmt.Printf("%s\n\n", sh.checkPath)
+	return sh.layoutPrinter(sh.checkPath, "")
+}
+
+func (sh *Shrinker) startCleaner() error {
+	go sh.runCleaners()
 
 	statsCh := sh.runStatGrabber()
 

@@ -1,6 +1,10 @@
 package walker
 
-import "github.com/karrick/godirwalk"
+import (
+	"os"
+
+	"github.com/karrick/godirwalk"
+)
 
 type FileInfo struct {
 	name      string
@@ -31,5 +35,13 @@ func NewFileInfoFromDe(de *godirwalk.Dirent) *FileInfo {
 		name:      de.Name(),
 		isDir:     de.IsDir(),
 		isRegular: de.IsRegular(),
+	}
+}
+
+func NewFileInfoFromOsFile(f os.FileInfo) *FileInfo {
+	return &FileInfo{
+		name:      f.Name(),
+		isDir:     f.IsDir(),
+		isRegular: !f.IsDir(),
 	}
 }

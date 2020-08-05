@@ -61,3 +61,13 @@ func compileRegExpList(regExpList []string) []*regexp.Regexp {
 	}
 	return regList
 }
+
+func min(x, y int) int {
+	if x > y {
+		return y
+	} else if x < y {
+		return x
+	} else {
+		return x
+	}
+}
