@@ -13,6 +13,9 @@ import (
 
 	. "github.com/icecream78/node_shrinker/fs"
 	. "github.com/icecream78/node_shrinker/walker"
+
+	humanize "github.com/dustin/go-humanize"
+	color "github.com/logrusorgru/aurora"
 )
 
 const NodeModulesDirname = "node_modules"
@@ -269,9 +272,12 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 	}
 	processedFiles := sliceToMap(filteredFiles)
 
+	var tabToAdd, tabToPass, logLine string
+	var printName, printFileSize interface{}
+	var fileSize int64 = 0
+
 	for i, file := range files {
-		var tabToAdd string = ""
-		var tabToPass string = ""
+		printName = file.Name()
 
 		if i == len(files)-1 {
 			tabToAdd = lastChar
@@ -283,28 +289,41 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 
 		tabToPass = tabPassed + tabToPass
 
-		var printChar string
 		_, isFileInProcess := processedFiles[file.Name()]
-		if isFileInProcess {
-			printChar = "✓"
-		} else {
-			printChar = "✗"
-		}
 		if file.IsDir() {
-			logLine := fmt.Sprintf("%v%v%v%v\n", tabPassed, tabToAdd, file.Name(), printChar)
-			fmt.Println(logLine)
+			if isFileInProcess {
+				printName = color.Green(printName)
+			} else {
+				printName = color.Yellow(printName)
+			}
+			if stat, err := fsManager.Stat(path.Join(checkPath, file.Name()), true); err == nil {
+				fileSize = stat.Size()
+			} else {
+				fileSize = 0
+			}
+		}
 
+		if !file.IsDir() {
+			if isFileInProcess {
+				printName = color.Green(printName)
+			} else {
+				printName = color.Red(printName)
+			}
+			fileSize = file.Size()
+		}
+
+		if fileSize != 0 {
+			printFileSize = color.Cyan(fmt.Sprintf("%v", humanize.Bytes(uint64(fileSize))))
+		} else {
+			printFileSize = color.Yellow("empty")
+		}
+
+		logLine = fmt.Sprintf("%v%v%v (%v)\n", tabPassed, tabToAdd, printName, printFileSize)
+		fmt.Println(logLine)
+
+		if file.IsDir() && !isFileInProcess {
 			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
 			sh.layoutPrinter(nextDirPath, tabToPass)
-		} else {
-			var fileSize string
-			if file.Size() != 0 {
-				fileSize = fmt.Sprintf("%vb", file.Size())
-			} else {
-				fileSize = "empty"
-			}
-			logLine := fmt.Sprintf("%v%v%v%v (%v)\n", tabPassed, tabToAdd, file.Name(), printChar, fileSize)
-			fmt.Println(logLine)
 		}
 	}
 
@@ -312,7 +331,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 }
 
 func (sh *Shrinker) startPrinter() error {
-	fmt.Printf("%s\n\n", sh.checkPath)
+	fmt.Printf("%s\n\n", color.Green(sh.checkPath))
 	return sh.layoutPrinter(sh.checkPath, "")
 }
 
@@ -335,7 +354,7 @@ func (sh *Shrinker) startCleaner() error {
 	}
 
 	fmt.Println("Remove stats:")
-	fmt.Printf("total removed: %d MB\n", stats.GetHumanSizeFormat(MegabyesFormat))
-	fmt.Printf("files removed: %d\n", stats.FilesCount())
+	fmt.Printf("total removed: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
+	fmt.Printf("files removed: %d\n", color.Cyan(stats.FilesCount()))
 	return err
 }
