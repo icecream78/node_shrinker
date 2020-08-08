@@ -27,16 +27,22 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: move Shrinker configuring with builder
-		err := shrunk.NewShrinker(&shrunk.Config{
+		shrinker, err := shrunk.NewShrinker(&shrunk.Config{
 			CheckPath:     checkPath,
 			VerboseOutput: verboseOutput,
 			ExcludeNames:  excludeNames,
 			IncludeNames:  includeNames,
 			RemoveFileExt: includeExtensions,
 			DryRun:        dryRun,
-		}).Start()
+		})
 		if err != nil {
 			fmt.Printf("Something has broken=) %v\n", err)
+			os.Exit(1)
+		}
+		err = shrinker.Start()
+		if err != nil {
+			fmt.Printf("Something has broken2=) %v\n", err)
+			os.Exit(1)
 		}
 	},
 }

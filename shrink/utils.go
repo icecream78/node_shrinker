@@ -1,6 +1,7 @@
 package shrunk
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -49,25 +50,14 @@ func devidePatternsFromRegularNames(input []string) (patterns []string, regular 
 	return
 }
 
-func compileRegExpList(regExpList []string) []*regexp.Regexp {
+func compileRegExpList(regExpList []string) ([]*regexp.Regexp, error) {
 	regList := make([]*regexp.Regexp, 0)
 	for i := 0; i < len(regExpList); i++ {
 		cmp, err := regexp.Compile(regExpList[i])
 		if err != nil {
-			// TODO: write more proper errro handling
-			fmt.Println("skiping")
+			return nil, errors.New(fmt.Sprintf("Error compile regular expression: %s", regExpList[i]))
 		}
 		regList = append(regList, cmp)
 	}
-	return regList
-}
-
-func min(x, y int) int {
-	if x > y {
-		return y
-	} else if x < y {
-		return x
-	} else {
-		return x
-	}
+	return regList, nil
 }

@@ -29,7 +29,7 @@ func (w *walkerStub) Walk(filepath string, callback WalkFunc, errCallback WalkEr
 }
 
 func TestExcludeNameFunc(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		ExcludeNames: []string{
 			"file",
 			"/a/b/c/file",
@@ -53,7 +53,7 @@ func TestExcludeNameFunc(t *testing.T) {
 }
 
 func TestRemoveDirNameFunc(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		IncludeNames: []string{
 			"dirname",
 			"/a/b/c/dirname",
@@ -77,7 +77,7 @@ func TestRemoveDirNameFunc(t *testing.T) {
 }
 
 func TestRemoveFileNameFunc(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		IncludeNames: []string{
 			"file",
 			"/a/b/c/file",
@@ -122,7 +122,7 @@ func TestStatGrabberFunc(t *testing.T) {
 		}, *fs.NewFileStat("result", "result", 2048, 2)},
 	}
 	for _, tc := range testCases {
-		sh := NewShrinker(&Config{})
+		sh, _ := NewShrinker(&Config{})
 		resStatsCh := sh.runStatGrabber()
 		t.Run(tc.alias, func(t *testing.T) {
 			for _, file := range tc.input {
@@ -154,7 +154,7 @@ func (tfi testFileInfo) IsRegular() bool {
 }
 
 func TestFileFilterExcludeByName(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		ExcludeNames: []string{
 			"file1",
 		},
@@ -180,7 +180,7 @@ func TestFileFilterExcludeByName(t *testing.T) {
 }
 
 func TestFileFilterIncludeByName(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		IncludeNames: []string{
 			"file1",
 		},
@@ -204,7 +204,7 @@ func TestFileFilterIncludeByName(t *testing.T) {
 }
 
 func TestFileFilterExcludeByRegexp(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		ExcludeNames: []string{
 			"file1",
 			"sc*",
@@ -231,7 +231,7 @@ func TestFileFilterExcludeByRegexp(t *testing.T) {
 }
 
 func TestFileFilterIncludeByRegexp(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		IncludeNames: []string{
 			"dirname1",
 			"f*",
@@ -256,7 +256,7 @@ func TestFileFilterIncludeByRegexp(t *testing.T) {
 }
 
 func TestFileFilterNotProcessDir(t *testing.T) {
-	sh := NewShrinker(&Config{})
+	sh, _ := NewShrinker(&Config{})
 
 	fileFullPath := "/dirname1"
 	input := testFileInfo{name: "dirname1", isDir: true, isRegular: false}
@@ -275,7 +275,7 @@ func TestFileFilterNotProcessDir(t *testing.T) {
 }
 
 func TestFileFilterRemoveDir(t *testing.T) {
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		IncludeNames: []string{
 			"dirname1",
 		},
@@ -314,7 +314,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		sh := NewShrinker(&Config{
+		sh, _ := NewShrinker(&Config{
 			VerboseOutput: false,
 		})
 		t.Run(tc.alias, func(t *testing.T) {
@@ -326,7 +326,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 
 func TestCleanerEmptyInput(t *testing.T) {
 	assert := assert.New(t)
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -354,7 +354,7 @@ func TestCleanerBasicRemoveFile(t *testing.T) {
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -397,7 +397,7 @@ func TestCleanerBasicRemoveDirectory(t *testing.T) {
 	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
 	osMock.On("RemoveAll", "/dir1").Return(nil)
 
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -439,7 +439,7 @@ func TestCleanerStatFileWithError(t *testing.T) {
 
 	osMock.On("Stat", "/test2", false).Return(nil, errors.New("some error"))
 
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -477,7 +477,7 @@ func TestCleanerRemoveFileWithError(t *testing.T) {
 	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
-	sh := NewShrinker(&Config{
+	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
 	})
@@ -532,7 +532,7 @@ func TestStartFunc(t *testing.T) {
 	osMock.On("Stat", "/here", false).Return(nil, os.ErrNotExist)
 
 	for _, tc := range testCases {
-		sh := NewShrinker(&Config{
+		sh, _ := NewShrinker(&Config{
 			CheckPath: "/here",
 		})
 		t.Run(tc.alias, func(t *testing.T) {
