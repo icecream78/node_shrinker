@@ -61,7 +61,7 @@ func NewShrinker(cfg *Config) (*Shrinker, error) {
 	} else if path.Base(cfg.CheckPath) == NodeModulesDirname {
 		checkPath = cfg.CheckPath
 	} else {
-		if pathExists(filepath.Join(checkPath, NodeModulesDirname)) {
+		if pathExists(filepath.Join(cfg.CheckPath, NodeModulesDirname)) {
 			checkPath = filepath.Join(cfg.CheckPath, NodeModulesDirname)
 		} else {
 			checkPath = cfg.CheckPath
