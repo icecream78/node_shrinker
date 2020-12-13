@@ -20,10 +20,7 @@ func sliceToMap(sl ...[]string) map[string]struct{} {
 
 func pathExists(path string) bool {
 	_, err := fsManager.Stat(path, false)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return true
+	return !os.IsNotExist(err)
 }
 
 func isStringPattern(input string) bool {
