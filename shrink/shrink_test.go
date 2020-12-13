@@ -351,6 +351,7 @@ func TestCleanerBasicRemoveFile(t *testing.T) {
 	osMock := new(mocks.FS)
 	fsManager = osMock
 
+	osMock.On("Stat", "/here/node_modules", false).Return(nil, os.ErrNotExist)
 	osMock.On("Stat", "/test1", false).Return(fs.NewFileStat("test1", "/test1", 1, 1), nil)
 	osMock.On("RemoveAll", "/test1").Return(nil)
 
@@ -394,11 +395,12 @@ func TestCleanerBasicRemoveDirectory(t *testing.T) {
 	osMock := new(mocks.FS)
 	fsManager = osMock
 
+	osMock.On("Stat", "/node_modules", false).Return(nil, os.ErrNotExist)
 	osMock.On("Stat", "/dir1", true).Return(fs.NewFileStat("dir1", "/dir1", 1, 1), nil)
 	osMock.On("RemoveAll", "/dir1").Return(nil)
 
 	sh, _ := NewShrinker(&Config{
-		CheckPath:     "/here",
+		CheckPath:     "/",
 		VerboseOutput: false,
 	})
 	go sh.cleaner(func() {
@@ -437,10 +439,11 @@ func TestCleanerStatFileWithError(t *testing.T) {
 	osMock := new(mocks.FS)
 	fsManager = osMock
 
+	osMock.On("Stat", "/node_modules", false).Return(nil, os.ErrNotExist)
 	osMock.On("Stat", "/test2", false).Return(nil, errors.New("some error"))
 
 	sh, _ := NewShrinker(&Config{
-		CheckPath:     "/here",
+		CheckPath:     "/",
 		VerboseOutput: false,
 	})
 	go sh.cleaner(func() {
@@ -474,11 +477,12 @@ func TestCleanerRemoveFileWithError(t *testing.T) {
 	osMock := new(mocks.FS)
 	fsManager = osMock
 
+	osMock.On("Stat", "/node_modules", false).Return(nil, os.ErrNotExist)
 	osMock.On("Stat", "/test3", false).Return(fs.NewFileStat("test3", "/test3", 1, 1), nil)
 	osMock.On("RemoveAll", "/test3").Return(errors.New("custom error"))
 
 	sh, _ := NewShrinker(&Config{
-		CheckPath:     "/here",
+		CheckPath:     "/",
 		VerboseOutput: false,
 	})
 	go sh.cleaner(func() {
@@ -529,6 +533,7 @@ func TestStartFunc(t *testing.T) {
 	osMock := new(mocks.FS)
 	fsManager = osMock
 	// osMock.On("Getwd").Return("/here", nil)
+	osMock.On("Stat", "/here/node_modules", false).Return(nil, os.ErrNotExist)
 	osMock.On("Stat", "/here", false).Return(nil, os.ErrNotExist)
 
 	for _, tc := range testCases {
