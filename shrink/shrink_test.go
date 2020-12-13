@@ -1,4 +1,4 @@
-package shrunk
+package shrink
 
 import (
 	"errors"
@@ -29,12 +29,12 @@ func (w *walkerStub) Walk(filepath string, callback WalkFunc, errCallback WalkEr
 }
 
 func TestExcludeNameFunc(t *testing.T) {
-	sh, _ := NewShrinker(&Config{
-		ExcludeNames: []string{
-			"file",
-			"/a/b/c/file",
-		},
-	})
+	excludes := []string{
+		"file",
+		"/a/b/c/file",
+	}
+	filter := NewFilter([]string{}, excludes, []string{})
+
 	testCases := []struct {
 		alias string
 		name  string
@@ -47,18 +47,18 @@ func TestExcludeNameFunc(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.alias, func(t *testing.T) {
-			assert.Equal(t, tc.want, sh.isExcludeName(tc.name), fmt.Sprintf("Input: %s", tc.name))
+			assert.Equal(t, tc.want, filter.isExcludeName(tc.name), fmt.Sprintf("Input: %s", tc.name))
 		})
 	}
 }
 
 func TestRemoveDirNameFunc(t *testing.T) {
-	sh, _ := NewShrinker(&Config{
-		IncludeNames: []string{
-			"dirname",
-			"/a/b/c/dirname",
-		},
-	})
+	includes := []string{
+		"dirname",
+		"/a/b/c/dirname",
+	}
+	filter := NewFilter(includes, []string{}, []string{})
+
 	testCases := []struct {
 		alias string
 		name  string
@@ -71,22 +71,23 @@ func TestRemoveDirNameFunc(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.alias, func(t *testing.T) {
-			assert.Equal(t, tc.want, sh.isDirToRemove(tc.name), fmt.Sprintf("Input: %s", tc.name))
+			assert.Equal(t, tc.want, filter.isDirToRemove(tc.name), fmt.Sprintf("Input: %s", tc.name))
 		})
 	}
 }
 
 func TestRemoveFileNameFunc(t *testing.T) {
-	sh, _ := NewShrinker(&Config{
-		IncludeNames: []string{
-			"file",
-			"/a/b/c/file",
-		},
-		RemoveFileExt: []string{
-			".js",
-			"js",
-		},
-	})
+	includeNames := []string{
+		"file",
+		"/a/b/c/file",
+	}
+	removeFileExt := []string{
+		".js",
+		"js",
+	}
+
+	filter := NewFilter(includeNames, []string{}, removeFileExt)
+
 	testCases := []struct {
 		alias string
 		name  string
@@ -104,7 +105,7 @@ func TestRemoveFileNameFunc(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.alias, func(t *testing.T) {
-			assert.Equal(t, tc.want, sh.isFileToRemove(tc.name), fmt.Sprintf("Input: %s", tc.name))
+			assert.Equal(t, tc.want, filter.isFileToRemove(tc.name), fmt.Sprintf("Input: %s", tc.name))
 		})
 	}
 }

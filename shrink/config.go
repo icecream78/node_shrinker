@@ -1,4 +1,4 @@
-package shrunk
+package shrink
 
 type Config struct {
 	VerboseOutput  bool

@@ -1,4 +1,4 @@
-package shrunk
+package shrink
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 	"log"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sync"
 
 	. "github.com/icecream78/node_shrinker/fs"
@@ -34,18 +33,13 @@ type removeObjInfo struct {
 }
 
 type Shrinker struct {
-	verboseOutput      bool
-	dryRun             bool
-	concurentLimit     int
-	checkPath          string
-	shrunkDirNames     map[string]struct{}
-	shrunkFileNames    map[string]struct{}
-	shrunkFileExt      map[string]struct{}
-	excludeNames       map[string]struct{}
-	regExpIncludeNames []*regexp.Regexp
-	regExpExcludeNames []*regexp.Regexp
-	removeCh           chan *removeObjInfo
-	statsCh            chan FileStat
+	verboseOutput  bool
+	dryRun         bool
+	concurentLimit int
+	checkPath      string
+	filter         *Filter
+	removeCh       chan *removeObjInfo
+	statsCh        chan FileStat
 }
 
 func NewShrinker(cfg *Config) (*Shrinker, error) {
@@ -68,81 +62,17 @@ func NewShrinker(cfg *Config) (*Shrinker, error) {
 		}
 	}
 
-	patternInclude, regularInclude := devidePatternsFromRegularNames(cfg.IncludeNames)
-	patternExclude, regularExclude := devidePatternsFromRegularNames(cfg.ExcludeNames)
-
 	walker = NewDirWalker(cfg.DryRun)
 
-	compiledIncludeRegList, err := compileRegExpList(patternInclude)
-	if err != nil {
-		return nil, err
-	}
-
-	compiledExcludeRegList, err := compileRegExpList(patternExclude)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Shrinker{
-		verboseOutput:      cfg.VerboseOutput,
-		dryRun:             cfg.DryRun,
-		checkPath:          checkPath,
-		shrunkDirNames:     sliceToMap(DefaultRemoveDirNames, regularInclude),
-		shrunkFileNames:    sliceToMap(DefaultRemoveFileNames, regularInclude),
-		shrunkFileExt:      sliceToMap(DefaultRemoveFileExt, cfg.RemoveFileExt),
-		excludeNames:       sliceToMap(regularExclude),
-		regExpIncludeNames: compiledIncludeRegList,
-		regExpExcludeNames: compiledExcludeRegList,
-		removeCh:           make(chan *removeObjInfo, concurentLimit),
-		statsCh:            make(chan FileStat, concurentLimit),
-		concurentLimit:     concurentLimit,
+		verboseOutput:  cfg.VerboseOutput,
+		dryRun:         cfg.DryRun,
+		checkPath:      checkPath,
+		filter:         NewFilter(cfg.IncludeNames, cfg.ExcludeNames, cfg.RemoveFileExt),
+		removeCh:       make(chan *removeObjInfo, concurentLimit),
+		statsCh:        make(chan FileStat, concurentLimit),
+		concurentLimit: concurentLimit,
 	}, nil
-}
-
-func (sh *Shrinker) isExcludeName(name string) bool {
-	_, exists := sh.excludeNames[name]
-	if exists {
-		return true
-	}
-
-	for _, pattern := range sh.regExpExcludeNames {
-		matched := pattern.MatchString(name)
-		if matched {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (sh *Shrinker) isIncludeName(name string) bool {
-	// return false
-	for _, pattern := range sh.regExpIncludeNames {
-		matched := pattern.MatchString(name)
-		if matched {
-			return true
-		}
-	}
-	return false
-}
-
-func (sh *Shrinker) isDirToRemove(name string) bool {
-	_, exists := sh.shrunkDirNames[name]
-	return exists
-}
-
-func (sh *Shrinker) isFileToRemove(name string) (exists bool) {
-	if _, exists = sh.shrunkFileNames[name]; exists {
-		return
-	}
-	ext := filepath.Ext(name)
-	if ext == name { // for cases, when files starts with leading dot
-		return
-	}
-	if _, exists = sh.shrunkFileExt[ext]; exists {
-		return
-	}
-	return
 }
 
 func (sh *Shrinker) cleaner(done func()) {
@@ -222,24 +152,9 @@ func (sh *Shrinker) Start() error {
 	return sh.startCleaner()
 }
 
-func (sh *Shrinker) checkIsFileToProcess(de FileInfoI) (bool, error) {
-	if sh.isExcludeName(de.Name()) {
-		return false, ExcludeError
-	}
-
-	if sh.isIncludeName(de.Name()) {
-		return true, nil
-	} else if de.IsDir() && sh.isDirToRemove(de.Name()) {
-		return true, SkipDirError
-	} else if de.IsRegular() && sh.isFileToRemove(de.Name()) {
-		return true, nil
-	}
-	return false, NotProcessError
-}
-
 // TODO: add errors wrapping for correct handling errors
 func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
-	isProcess, err := sh.checkIsFileToProcess(de)
+	isProcess, err := sh.filter.Check(de)
 	if isProcess {
 		ff := &removeObjInfo{
 			isDir:    de.IsDir(),
@@ -274,7 +189,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 
 	filteredFiles := make([]string, 0)
 	for _, file := range files {
-		isProcess, _ := sh.checkIsFileToProcess(NewFileInfoFromOsFile(file))
+		isProcess, _ := sh.filter.Check(NewFileInfoFromOsFile(file))
 		if isProcess {
 			filteredFiles = append(filteredFiles, file.Name())
 		}

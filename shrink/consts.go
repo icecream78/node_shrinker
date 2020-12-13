@@ -1,4 +1,4 @@
-package shrunk
+package shrink
 
 var DefaultRemoveDirNames []string = []string{
 	"test",

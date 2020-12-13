@@ -1,4 +1,4 @@
-package shrunk
+package shrink
 
 import (
 	"fmt"
