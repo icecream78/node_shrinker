@@ -13,6 +13,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type loggerStub struct {
+}
+
+func newLoggerStub() *loggerStub {
+	return &loggerStub{}
+}
+
+func (l *loggerStub) Infof(format string, a ...interface{}) {}
+func (l *loggerStub) Infoln(a ...interface{})               {}
+
 type walkerStub struct {
 	testPathes map[string]string
 }
@@ -113,17 +123,17 @@ func TestRemoveFileNameFunc(t *testing.T) {
 func TestStatGrabberFunc(t *testing.T) {
 	testCases := []struct {
 		alias string
-		input []fs.FileStat
-		want  fs.FileStat
+		input []*fs.FileStat
+		want  *fs.FileStat
 	}{
-		{"Check stats grabber with empty input", []fs.FileStat{}, *fs.NewFileStat("result", "result", 0, 0)},
-		{"Put few files for calculations", []fs.FileStat{
-			*fs.NewFileStat("1", "1", 1024, 1),
-			*fs.NewFileStat("2", "2", 1024, 1),
-		}, *fs.NewFileStat("result", "result", 2048, 2)},
+		{"Check stats grabber with empty input", []*fs.FileStat{}, fs.NewFileStat("result", "result", 0, 0)},
+		{"Put few files for calculations", []*fs.FileStat{
+			fs.NewFileStat("1", "1", 1024, 1),
+			fs.NewFileStat("2", "2", 1024, 1),
+		}, fs.NewFileStat("result", "result", 2048, 2)},
 	}
 	for _, tc := range testCases {
-		sh, _ := NewShrinker(&Config{})
+		sh, _ := NewShrinker(&Config{}, newLoggerStub())
 		resStatsCh := sh.runStatGrabber()
 		t.Run(tc.alias, func(t *testing.T) {
 			for _, file := range tc.input {
@@ -162,7 +172,7 @@ func TestFileFilterExcludeByName(t *testing.T) {
 		IncludeNames: []string{
 			"dirname1",
 		},
-	})
+	}, newLoggerStub())
 
 	fileFullPath := "/file1"
 	input := testFileInfo{name: "file1", isDir: false, isRegular: true}
@@ -185,7 +195,7 @@ func TestFileFilterIncludeByName(t *testing.T) {
 		IncludeNames: []string{
 			"file1",
 		},
-	})
+	}, newLoggerStub())
 
 	fileFullPath := "/file1"
 	input := testFileInfo{name: "file1", isDir: false, isRegular: true}
@@ -213,7 +223,7 @@ func TestFileFilterExcludeByRegexp(t *testing.T) {
 		IncludeNames: []string{
 			"dirname1",
 		},
-	})
+	}, newLoggerStub())
 
 	fileFullPath := "/script.1.js"
 	input := testFileInfo{name: "script.1.js", isDir: false, isRegular: true}
@@ -237,7 +247,7 @@ func TestFileFilterIncludeByRegexp(t *testing.T) {
 			"dirname1",
 			"f*",
 		},
-	})
+	}, newLoggerStub())
 
 	fileFullPath := "/file2.ts"
 	input := testFileInfo{name: "file2.ts", isDir: false, isRegular: true}
@@ -257,7 +267,7 @@ func TestFileFilterIncludeByRegexp(t *testing.T) {
 }
 
 func TestFileFilterNotProcessDir(t *testing.T) {
-	sh, _ := NewShrinker(&Config{})
+	sh, _ := NewShrinker(&Config{}, newLoggerStub())
 
 	fileFullPath := "/dirname1"
 	input := testFileInfo{name: "dirname1", isDir: true, isRegular: false}
@@ -280,7 +290,7 @@ func TestFileFilterRemoveDir(t *testing.T) {
 		IncludeNames: []string{
 			"dirname1",
 		},
-	})
+	}, newLoggerStub())
 
 	fileFullPath := "/dirname1"
 	input := testFileInfo{name: "dirname1", isDir: true, isRegular: false}
@@ -317,7 +327,7 @@ func TestFileFilterErrCallbakc(t *testing.T) {
 	for _, tc := range testCases {
 		sh, _ := NewShrinker(&Config{
 			VerboseOutput: false,
-		})
+		}, newLoggerStub())
 		t.Run(tc.alias, func(t *testing.T) {
 			actionCode := sh.fileFilterErrCallback(tc.fullpath, tc.inputErr)
 			assert.Equal(t, tc.want, actionCode, fmt.Sprintf("Input: %v", tc.inputErr))
@@ -330,7 +340,7 @@ func TestCleanerEmptyInput(t *testing.T) {
 	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
-	})
+	}, newLoggerStub())
 	go sh.cleaner(func() {
 		close(sh.statsCh)
 	})
@@ -339,10 +349,9 @@ func TestCleanerEmptyInput(t *testing.T) {
 	stats, ok := <-sh.statsCh
 
 	expectedChannelCloseStatus := false
-	expectedFile := fs.FileStat{}
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
-	assert.Equal(&expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	assert.Nil(stats, fmt.Sprintf("Input: %v", "empty"))
 }
 
 func TestCleanerBasicRemoveFile(t *testing.T) {
@@ -359,7 +368,7 @@ func TestCleanerBasicRemoveFile(t *testing.T) {
 	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/here",
 		VerboseOutput: false,
-	})
+	}, newLoggerStub())
 	go sh.cleaner(func() {
 		close(sh.statsCh)
 	})
@@ -379,7 +388,7 @@ func TestCleanerBasicRemoveFile(t *testing.T) {
 	expectedFile := fs.NewFileStat("test1", "/test1", 1, 1)
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel open")
-	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	assert.Equal(expectedFile, stats, fmt.Sprintf("Input: %v", "empty"))
 
 	// checking is channel properly closed
 	expectedChannelCloseStatus2 := false
@@ -403,7 +412,7 @@ func TestCleanerBasicRemoveDirectory(t *testing.T) {
 	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/",
 		VerboseOutput: false,
-	})
+	}, newLoggerStub())
 	go sh.cleaner(func() {
 		close(sh.statsCh)
 	})
@@ -423,7 +432,7 @@ func TestCleanerBasicRemoveDirectory(t *testing.T) {
 	expectedFile := fs.NewFileStat("dir1", "/dir1", 1, 1)
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel open")
-	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	assert.Equal(expectedFile, stats, fmt.Sprintf("Input: %v", "empty"))
 
 	// checking is channel properly closed
 	expectedChannelCloseStatus2 := false
@@ -446,7 +455,7 @@ func TestCleanerStatFileWithError(t *testing.T) {
 	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/",
 		VerboseOutput: false,
-	})
+	}, newLoggerStub())
 	go sh.cleaner(func() {
 		close(sh.statsCh)
 	})
@@ -463,10 +472,9 @@ func TestCleanerStatFileWithError(t *testing.T) {
 
 	stats, ok := <-sh.statsCh
 	expectedChannelCloseStatus := false
-	expectedFile := &fs.FileStat{}
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
-	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	assert.Nil(stats, fmt.Sprintf("Input: %v", "empty"))
 
 	osMock.AssertExpectations(t)
 }
@@ -485,7 +493,7 @@ func TestCleanerRemoveFileWithError(t *testing.T) {
 	sh, _ := NewShrinker(&Config{
 		CheckPath:     "/",
 		VerboseOutput: false,
-	})
+	}, newLoggerStub())
 	go sh.cleaner(func() {
 		close(sh.statsCh)
 	})
@@ -502,10 +510,9 @@ func TestCleanerRemoveFileWithError(t *testing.T) {
 
 	stats, ok := <-sh.statsCh
 	expectedChannelCloseStatus := false
-	expectedFile := &fs.FileStat{}
 
 	assert.Equal(expectedChannelCloseStatus, ok, "is channel closed")
-	assert.Equal(expectedFile, &stats, fmt.Sprintf("Input: %v", "empty"))
+	assert.Nil(stats, fmt.Sprintf("Input: %v", "empty"))
 
 	osMock.AssertExpectations(t)
 }
@@ -540,7 +547,7 @@ func TestStartFunc(t *testing.T) {
 	for _, tc := range testCases {
 		sh, _ := NewShrinker(&Config{
 			CheckPath: "/here",
-		})
+		}, newLoggerStub())
 		t.Run(tc.alias, func(t *testing.T) {
 			err := sh.Start()
 			if tc.waitResp {

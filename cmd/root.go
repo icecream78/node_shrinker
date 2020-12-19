@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	shrunk "github.com/icecream78/node_shrinker/shrink"
 	"github.com/spf13/cobra"
@@ -34,14 +35,14 @@ to quickly create a Cobra application.`,
 			IncludeNames:  includeNames,
 			RemoveFileExt: includeExtensions,
 			DryRun:        dryRun,
-		})
+		}, log.New())
 		if err != nil {
-			fmt.Printf("Something has broken=) %v\n", err)
+			log.Infof("Something has broken=) %v\n", err)
 			os.Exit(1)
 		}
 		err = shrinker.Start()
 		if err != nil {
-			fmt.Printf("Something has broken2=) %v\n", err)
+			log.Infof("Something has broken2=) %v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -49,12 +50,19 @@ to quickly create a Cobra application.`,
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Infoln(err)
 		os.Exit(1)
 	}
 }
 
 func init() {
+	log.SetFormatter(&log.TextFormatter{
+		ForceColors:            true,
+		DisableTimestamp:       true,
+		DisableLevelTruncation: true,
+	})
+	log.SetOutput(os.Stdout)
+
 	rootCmd.PersistentFlags().StringVarP(&checkPath, "dir", "d", "", "path to directory where need cleanup")
 	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "list of files/directories that should not be removed. Flag can be specified multiple times. Support regular expression syntax")
 	rootCmd.PersistentFlags().StringSliceVarP(&includeNames, "include", "i", []string{}, "list of files/directories that should be included in remove list. Flag can be specified multiple times. Support regular expression syntax")
