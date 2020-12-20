@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"os"
 
+	"github.com/dustin/go-humanize"
+	color "github.com/logrusorgru/aurora"
 	log "github.com/sirupsen/logrus"
 
-	shrunk "github.com/icecream78/node_shrinker/shrink"
+	"github.com/icecream78/node_shrinker/fs"
+	"github.com/icecream78/node_shrinker/shrink"
 	"github.com/spf13/cobra"
 )
 
@@ -27,23 +32,51 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		logger := log.New()
+
 		// TODO: move Shrinker configuring with builder
-		shrinker, err := shrunk.NewShrinker(&shrunk.Config{
+		shrinker, err := shrink.NewShrinker(&shrink.Config{
 			CheckPath:     checkPath,
 			VerboseOutput: verboseOutput,
 			ExcludeNames:  excludeNames,
 			IncludeNames:  includeNames,
 			RemoveFileExt: includeExtensions,
-			DryRun:        dryRun,
-		}, log.New())
+		}, logger)
+
 		if err != nil {
+			if errors.Is(err, shrink.NotExistError) {
+				log.Infof("Path %s doesn`t exist\n", checkPath)
+				os.Exit(1)
+			}
+
 			log.Infof("Something has broken=) %v\n", err)
 			os.Exit(1)
 		}
-		err = shrinker.Start()
+
+		logger.Infof("Start process directory %s\n", checkPath)
+
+		ctx := context.TODO()
+
+		var stats *fs.FileStat
+		if dryRun {
+			stats = shrinker.DryRun(ctx)
+		} else {
+			stats = shrinker.Clean(ctx)
+		}
+
 		if err != nil {
 			log.Infof("Something has broken2=) %v\n", err)
 			os.Exit(1)
+		}
+
+		if dryRun {
+			logger.Infoln("Dry-run stats:")
+			logger.Infof("space to release: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
+			logger.Infof("files count to remove: %d\n", color.Cyan(stats.FilesCount()))
+		} else {
+			logger.Infoln("Remove stats:")
+			logger.Infof("released space: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
+			logger.Infof("files count: %d\n", color.Cyan(stats.FilesCount()))
 		}
 	},
 }

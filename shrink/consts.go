@@ -16,3 +16,10 @@ var DefaultRemoveFileExt []string = []string{
 	".d.ts",
 	".coffee",
 }
+
+var NodeModulesDirname string = "node_modules"
+var (
+	progressChar string = "├───"
+	lastChar     string = "└───"
+	tabChar      string = "	"
+)

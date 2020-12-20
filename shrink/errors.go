@@ -2,4 +2,4 @@ package shrink
 
 import "errors"
 
-var notExistError error = errors.New("Path doesn`t exist")
+var NotExistError error = errors.New("path doesn`t exist")

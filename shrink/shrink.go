@@ -1,7 +1,7 @@
 package shrink
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -15,13 +15,6 @@ import (
 	color "github.com/logrusorgru/aurora"
 )
 
-const NodeModulesDirname = "node_modules"
-const (
-	progressChar = "├───"
-	lastChar     = "└───"
-	tabChar      = "	"
-)
-
 var fsManager FS = NewFS() // for test purposes
 var walker Walker
 
@@ -31,23 +24,19 @@ type removeObjInfo struct {
 	fullpath string
 }
 
-type Logger interface {
-	Infof(format string, a ...interface{})
-	Infoln(a ...interface{})
-}
-
 type Shrinker struct {
 	verboseOutput  bool
-	dryRun         bool
 	concurentLimit int
 	checkPath      string
 	filter         *Filter
-	removeCh       chan *removeObjInfo
-	statsCh        chan *FileStat
 	logger         Logger
 }
 
 func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
+	if !pathExists(cfg.CheckPath) {
+		return nil, NotExistError
+	}
+
 	concurentLimit := cfg.ConcurentLimit
 	if concurentLimit == 0 {
 		concurentLimit = 1
@@ -71,106 +60,142 @@ func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
 
 	return &Shrinker{
 		verboseOutput:  cfg.VerboseOutput,
-		dryRun:         cfg.DryRun,
 		checkPath:      checkPath,
 		filter:         NewFilter(cfg.IncludeNames, cfg.ExcludeNames, cfg.RemoveFileExt),
-		removeCh:       make(chan *removeObjInfo, concurentLimit),
-		statsCh:        make(chan *FileStat, concurentLimit),
 		concurentLimit: concurentLimit,
 		logger:         logger,
 	}, nil
 }
 
-func (sh *Shrinker) cleaner(done func()) {
+func (sh *Shrinker) DryRun(ctx context.Context) (stats *FileStat) {
+	filesCh := sh.layoutPrinterWrapper(sh.checkPath)
+	statsCh := sh.runStatGrabber(ctx, filesCh)
+	stats = <-statsCh
+
+	return stats
+}
+
+func (sh *Shrinker) Clean(ctx context.Context) (stats *FileStat) {
+	filesCh := sh.inspectPath(sh.checkPath)
+	removeCh := sh.runCleaners(ctx, filesCh)
+	statsCh := sh.runStatGrabber(ctx, removeCh)
+
+	stats = <-statsCh
+	return stats
+}
+
+func (sh *Shrinker) inspectPath(path string) chan *removeObjInfo {
+	inspectCh := make(chan *removeObjInfo)
+	go func(ch chan *removeObjInfo) {
+		defer close(ch)
+
+		_ = walker.Walk(sh.checkPath, sh.fileFilterCallback(inspectCh), sh.fileFilterErrCallback)
+	}(inspectCh)
+
+	return inspectCh
+}
+
+func (sh *Shrinker) cleaner(ctx context.Context, done func(), removeCh chan *removeObjInfo, statsCh chan *FileStat) {
 	var err error
-	var obj *removeObjInfo
 	var stat *FileStat
 
-	for obj = range sh.removeCh {
-		if sh.verboseOutput {
-			sh.logger.Infof("removing: %s\n", obj.fullpath)
-		}
-
-		if obj.isDir {
-			stat, err = fsManager.Stat(obj.fullpath, true)
-		} else {
-			stat, err = fsManager.Stat(obj.fullpath, false)
-		}
-
-		if err != nil {
+	for {
+		select {
+		case obj := <-removeCh:
 			if sh.verboseOutput {
-				sh.logger.Infof("ERROR: %s\n", err)
+				sh.logger.Infof("removing: %s\n", obj.fullpath)
 			}
-			continue
-		}
 
-		if err = fsManager.RemoveAll(obj.fullpath); err != nil {
-			if sh.verboseOutput {
-				sh.logger.Infof("ERROR: %s\n", err)
+			if obj.isDir {
+				stat, err = fsManager.Stat(obj.fullpath, true)
+			} else {
+				stat, err = fsManager.Stat(obj.fullpath, false)
 			}
-			continue
+
+			if err != nil {
+				if sh.verboseOutput {
+					sh.logger.Infof("ERROR: %s\n", err)
+				}
+				continue
+			}
+
+			if err = fsManager.RemoveAll(obj.fullpath); err != nil {
+				if sh.verboseOutput {
+					sh.logger.Infof("ERROR: %s\n", err)
+				}
+				continue
+			}
+			statsCh <- stat
+		case <-ctx.Done():
+			done()
+			return
 		}
-		sh.statsCh <- stat
 	}
-	done()
 }
 
-func (sh *Shrinker) runCleaners() (err error) {
-	var wg sync.WaitGroup
-	wg.Add(sh.concurentLimit)
-	for i := 0; i < sh.concurentLimit; i++ {
-		go sh.cleaner(wg.Done)
-	}
-	wg.Wait()
-	close(sh.statsCh)
-	return nil
+func (sh *Shrinker) runCleaners(ctx context.Context, input chan *removeObjInfo) (output chan *FileStat) {
+	statsCh := make(chan *FileStat)
+	go func(out chan *FileStat) {
+		var wg sync.WaitGroup
+		wg.Add(sh.concurentLimit)
+		for i := 0; i < sh.concurentLimit; i++ {
+			go sh.cleaner(ctx, wg.Done, input, out)
+		}
+		wg.Wait()
+		close(out)
+	}(statsCh)
+
+	return statsCh
 }
 
-func (sh *Shrinker) runStatGrabber() chan *FileStat {
+func (sh *Shrinker) runStatGrabber(ctx context.Context, statsCh chan *FileStat) chan *FileStat {
 	resCh := make(chan *FileStat)
 
 	go func(resCh chan *FileStat) {
-		var stat *FileStat
 		var removedCount int64
 		var removedSize int64
-		for stat = range sh.statsCh {
-			removedCount += stat.FilesCount()
-			removedSize += stat.Size()
+
+		defer close(resCh)
+		defer func() {
+			resCh <- NewFileStat("result", "result", removedSize, removedCount)
+		}()
+
+		for {
+			select {
+			case stat, isOpen := <-statsCh:
+				if stat != nil {
+					removedCount += stat.FilesCount()
+					removedSize += stat.Size()
+				}
+				if !isOpen {
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
 		}
-		resCh <- NewFileStat("result", "result", removedSize, removedCount)
 	}(resCh)
 
 	return resCh
 }
 
-func (sh *Shrinker) Start() error {
-	if !pathExists(sh.checkPath) {
-		sh.logger.Infof("Path %s doesn`t exist\n", sh.checkPath)
-		return errors.New("path doesn`t exist")
-	}
-
-	if sh.dryRun {
-		return sh.startPrinter()
-	}
-
-	return sh.startCleaner()
-}
-
-// TODO: add errors wrapping for correct handling errors
-func (sh *Shrinker) fileFilterCallback(osPathname string, de FileInfoI) error {
-	isProcess, err := sh.filter.Check(de)
-	if isProcess {
-		ff := &removeObjInfo{
-			isDir:    de.IsDir(),
-			filename: de.Name(),
-			fullpath: osPathname,
+func (sh *Shrinker) fileFilterCallback(passCh chan *removeObjInfo) func(string, FileInfoI) error {
+	return func(osPathname string, de FileInfoI) error {
+		isProcessable, err := sh.filter.Check(de)
+		if isProcessable {
+			ff := removeObjInfo{
+				isDir:    de.IsDir(),
+				filename: de.Name(),
+				fullpath: osPathname,
+			}
+			passCh <- &ff
 		}
-		sh.removeCh <- ff
+
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAction {
@@ -185,7 +210,19 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	return SkipNode
 }
 
-func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
+func (sh *Shrinker) layoutPrinterWrapper(checkPath string) chan *FileStat {
+	ch := make(chan *FileStat)
+
+	go func(ch chan *FileStat) {
+		_ = sh.layoutPrinter(checkPath, "", ch)
+
+		close(ch)
+	}(ch)
+
+	return ch
+}
+
+func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string, statsCh chan *FileStat) error {
 	files, err := ioutil.ReadDir(checkPath)
 	if err != nil {
 		sh.logger.Infoln(err)
@@ -255,55 +292,15 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string) error {
 		sh.logger.Infoln(logLine)
 
 		if isFileInProcess {
-			sh.statsCh <- fileStat
+			statsCh <- fileStat
 		}
 
 		// skip directories that matched by name
 		if file.IsDir() && !isFileInProcess {
 			nextDirPath := fmt.Sprintf("%v/%v", checkPath, file.Name())
-			sh.layoutPrinter(nextDirPath, tabToPass)
+			_ = sh.layoutPrinter(nextDirPath, tabToPass, statsCh)
 		}
 	}
 
 	return nil
-}
-
-func (sh *Shrinker) startPrinter() (err error) {
-	sh.logger.Infof("Start checking directory %s\n", color.Green(sh.checkPath))
-	statsCh := sh.runStatGrabber()
-
-	if err = sh.layoutPrinter(sh.checkPath, ""); err != nil {
-		return
-	}
-
-	close(sh.statsCh)
-	stats := <-statsCh
-	close(statsCh)
-
-	sh.logger.Infoln("Dry-run stats:")
-	sh.logger.Infof("space to release: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
-	sh.logger.Infof("files count to remove: %d\n", color.Cyan(stats.FilesCount()))
-	return
-}
-
-func (sh *Shrinker) startCleaner() error {
-	go sh.runCleaners()
-
-	statsCh := sh.runStatGrabber()
-
-	sh.logger.Infof("Start checking directory %s\n", color.Green(sh.checkPath))
-	err := walker.Walk(sh.checkPath, sh.fileFilterCallback, sh.fileFilterErrCallback)
-
-	close(sh.removeCh)
-
-	stats := <-statsCh
-
-	if err != nil {
-		return err
-	}
-
-	sh.logger.Infoln("Remove stats:")
-	sh.logger.Infof("released space: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
-	sh.logger.Infof("files count: %d\n", color.Cyan(stats.FilesCount()))
-	return err
 }

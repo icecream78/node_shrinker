@@ -64,3 +64,27 @@ func TestRemoveFileNameFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestExcludeNameFunc(t *testing.T) {
+	excludes := []string{
+		"file",
+		"/a/b/c/file",
+	}
+	filter := NewFilter([]string{}, excludes, []string{})
+
+	testCases := []struct {
+		alias string
+		name  string
+		want  bool
+	}{
+		{"Test excluded file by relative path", "file", true},
+		{"Test excluded file by absolute path", "/a/b/c/file", true},
+		{"Test not excluded file", "file2", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.alias, func(t *testing.T) {
+			assert.Equal(t, tc.want, filter.isExcludeName(tc.name), fmt.Sprintf("Input: %s", tc.name))
+		})
+	}
+}
