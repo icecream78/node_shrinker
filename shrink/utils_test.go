@@ -56,3 +56,10 @@ func TestSplitPatternsFunc(t *testing.T) {
 		assert.Equal(t, regular, tc.expectedRegular, fmt.Sprintf("Input: %v", tc.input))
 	}
 }
+
+func TestCompileErrorFunc(t *testing.T) {
+	inputRegExp := []string{"*.?!.**"}
+
+	_, err := compileRegExpList(inputRegExp)
+	assert.NotNil(t, err, fmt.Sprintf("Input: %v", inputRegExp))
+}

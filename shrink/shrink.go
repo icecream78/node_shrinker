@@ -225,7 +225,7 @@ func (sh *Shrinker) layoutPrinterWrapper(checkPath string) chan *FileStat {
 func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string, statsCh chan *FileStat) error {
 	files, err := ioutil.ReadDir(checkPath)
 	if err != nil {
-		sh.logger.Infoln(err)
+		return err
 	}
 
 	filteredFiles := make([]string, 0)
@@ -239,7 +239,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string, statsCh ch
 
 	var tabToAdd, tabToPass, logLine string
 	var printName, printFileSize interface{}
-	var fileSize int64 = 0
+	var fileSize int64
 	var fileStat *FileStat
 
 	for i, file := range files {
@@ -270,9 +270,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string, statsCh ch
 				fileSize = 0
 				fileStat = NewFileStat(file.Name(), path.Join(checkPath, file.Name()), 0, 1)
 			}
-		}
-
-		if !file.IsDir() {
+		} else {
 			if isFileInProcess {
 				printName = color.Green(printName)
 			} else {
