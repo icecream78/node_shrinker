@@ -8,8 +8,7 @@ import (
 )
 
 type Filter struct {
-	shrunkDirNames     map[string]struct{}
-	shrunkFileNames    map[string]struct{}
+	includeFileNames   map[string]struct{}
 	shrunkFileExt      map[string]struct{}
 	excludeNames       map[string]struct{}
 	regExpIncludeNames []*regexp.Regexp
@@ -25,9 +24,9 @@ func NewFilter(includeNames, excludeNames, includeExtenstions []string) *Filter 
 	compiledExcludeRegList, _ := compileRegExpList(patternExclude)
 
 	return &Filter{
-		shrunkDirNames:     sliceToMap(DefaultRemoveDirNames, regularInclude),
-		shrunkFileNames:    sliceToMap(DefaultRemoveFileNames, regularInclude),
-		shrunkFileExt:      sliceToMap(DefaultRemoveFileExt, includeExtenstions),
+		includeFileNames: sliceToMap(regularInclude),
+		shrunkFileExt:    sliceToMap(includeExtenstions),
+
 		excludeNames:       sliceToMap(regularExclude),
 		regExpIncludeNames: compiledIncludeRegList,
 		regExpExcludeNames: compiledExcludeRegList,
@@ -36,26 +35,35 @@ func NewFilter(includeNames, excludeNames, includeExtenstions []string) *Filter 
 
 // Checks is provided file need to removed or not
 func (f *Filter) Check(de FileInfoI) (bool, error) {
+	if f.isIncludeName(de.Name()) {
+		return true, nil
+	}
+
+	if f.isIncludeRegName(de.Name()) {
+		return true, nil
+	}
+
+	if de.IsRegular() && f.isIncludeExt(de.Name()) {
+		return true, nil
+	}
+
 	if f.isExcludeName(de.Name()) {
 		return false, ExcludeError
 	}
 
-	if f.isIncludeName(de.Name()) {
-		return true, nil
-	} else if de.IsDir() && f.isDirToRemove(de.Name()) {
-		return true, SkipDirError
-	} else if de.IsRegular() && f.isFileToRemove(de.Name()) {
-		return true, nil
+	if f.isExcludeRegName(de.Name()) {
+		return false, ExcludeError
 	}
+
 	return false, NotProcessError
 }
 
 func (f *Filter) isExcludeName(name string) bool {
 	_, exists := f.excludeNames[name]
-	if exists {
-		return true
-	}
+	return exists
+}
 
+func (f *Filter) isExcludeRegName(name string) bool {
 	for _, pattern := range f.regExpExcludeNames {
 		matched := pattern.MatchString(name)
 		if matched {
@@ -66,7 +74,7 @@ func (f *Filter) isExcludeName(name string) bool {
 	return false
 }
 
-func (f *Filter) isIncludeName(name string) bool {
+func (f *Filter) isIncludeRegName(name string) bool {
 	for _, pattern := range f.regExpIncludeNames {
 		matched := pattern.MatchString(name)
 		if matched {
@@ -76,19 +84,17 @@ func (f *Filter) isIncludeName(name string) bool {
 	return false
 }
 
-func (f *Filter) isDirToRemove(name string) bool {
-	_, exists := f.shrunkDirNames[name]
+func (f *Filter) isIncludeName(name string) bool {
+	_, exists := f.includeFileNames[name]
 	return exists
 }
 
-func (f *Filter) isFileToRemove(name string) (exists bool) {
-	if _, exists = f.shrunkFileNames[name]; exists {
-		return
-	}
+func (f *Filter) isIncludeExt(name string) (exists bool) {
 	ext := filepath.Ext(name)
 	if ext == name { // for cases, when files starts with leading dot
 		return
 	}
+
 	if _, exists = f.shrunkFileExt[ext]; exists {
 		return
 	}
