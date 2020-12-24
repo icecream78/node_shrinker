@@ -17,7 +17,6 @@ var DefaultRemoveFileExt []string = []string{
 	".coffee",
 }
 
-var NodeModulesDirname string = "node_modules"
 var (
 	progressChar string = "├───"
 	lastChar     string = "└───"

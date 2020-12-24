@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 
 	"github.com/dustin/go-humanize"
 	color "github.com/logrusorgru/aurora"
@@ -14,12 +15,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var dryRun bool
-var verboseOutput bool
+var dryRun, verboseOutput, isNodeDir bool
 var checkPath string
-var excludeNames []string
-var includeNames []string
-var includeExtensions []string
+var excludeNames, includeNames, includeExtensions []string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -33,6 +31,23 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := log.New()
+
+		if isNodeDir {
+			checkPath = path.Join(checkPath, "node_modules")
+		}
+
+		if exists, err := isDirectoryExists(checkPath); err != nil {
+			if errors.Is(err, ProvidedFileError) {
+				logger.Info("Provided specific file, not a path to directory for clean up. Shut down...")
+				return
+			}
+
+			logger.Info("Fail to check path existence with error: %s", err.Error())
+			return
+		} else if !exists {
+			logger.Info("Provided non exist path. Shut down...")
+			return
+		}
 
 		// TODO: move Shrinker configuring with builder
 		shrinker, err := shrink.NewShrinker(&shrink.Config{
@@ -103,4 +118,5 @@ func init() {
 
 	rootCmd.PersistentFlags().BoolVarP(&verboseOutput, "verbose", "v", false, "more detailed output")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "display what files will be removed")
+	rootCmd.PersistentFlags().BoolVar(&isNodeDir, "node", true, "need detect node_modules dir")
 }

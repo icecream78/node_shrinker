@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
-	"path/filepath"
 	"sync"
 
 	. "github.com/icecream78/node_shrinker/fs"
@@ -44,16 +43,7 @@ func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
 	var checkPath string
 
 	if cfg.CheckPath == "" {
-		path, _ := fsManager.Getwd()
-		checkPath = filepath.Join(path, NodeModulesDirname)
-	} else if path.Base(cfg.CheckPath) == NodeModulesDirname {
-		checkPath = cfg.CheckPath
-	} else {
-		if pathExists(filepath.Join(cfg.CheckPath, NodeModulesDirname)) {
-			checkPath = filepath.Join(cfg.CheckPath, NodeModulesDirname)
-		} else {
-			checkPath = cfg.CheckPath
-		}
+		checkPath, _ = fsManager.Getwd()
 	}
 
 	walker = NewDirWalker(cfg.DryRun)
