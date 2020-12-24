@@ -35,6 +35,14 @@ func NewFilter(includeNames, excludeNames, includeExtenstions []string) *Filter 
 
 // Checks is provided file need to removed or not
 func (f *Filter) Check(de FileInfoI) (bool, error) {
+	if f.isExcludeName(de.Name()) {
+		return false, ExcludeError
+	}
+
+	if f.isExcludeRegName(de.Name()) {
+		return false, ExcludeError
+	}
+
 	if f.isIncludeName(de.Name()) {
 		return true, nil
 	}
@@ -45,14 +53,6 @@ func (f *Filter) Check(de FileInfoI) (bool, error) {
 
 	if de.IsRegular() && f.isIncludeExt(de.Name()) {
 		return true, nil
-	}
-
-	if f.isExcludeName(de.Name()) {
-		return false, ExcludeError
-	}
-
-	if f.isExcludeRegName(de.Name()) {
-		return false, ExcludeError
 	}
 
 	return false, NotProcessError

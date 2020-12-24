@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	. "github.com/icecream78/node_shrinker/walker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -152,6 +153,69 @@ func TestIncludeRegNameFunc(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.alias, func(t *testing.T) {
 			assert.Equal(t, tc.want, filter.isIncludeRegName(tc.name), fmt.Sprintf("Input: %s", tc.name))
+		})
+	}
+}
+
+type fileTestStub struct {
+	name      string
+	isRegular bool
+}
+
+func newFileTestStub(name string, isFile bool) *fileTestStub {
+	return &fileTestStub{
+		name:      name,
+		isRegular: isFile,
+	}
+}
+
+func (s *fileTestStub) Name() string {
+	return s.name
+}
+
+func (s *fileTestStub) IsDir() bool {
+	return !s.isRegular
+}
+
+func (s *fileTestStub) IsRegular() bool {
+	return s.isRegular
+}
+
+func TestCheckFunc(t *testing.T) {
+	includes := []string{
+		"file1",
+		"nam*",
+	}
+	extensions := []string{
+		".js",
+	}
+	exlcudes := []string{
+		"file2",
+		"sur*",
+	}
+
+	filter := NewFilter(includes, exlcudes, extensions)
+
+	testCases := []struct {
+		alias       string
+		input       *fileTestStub
+		wantedBool  bool
+		wantedError error
+	}{
+		{alias: "Include regular file name", input: newFileTestStub("file1", true), wantedBool: true, wantedError: nil},
+		{alias: "Include regexp file name", input: newFileTestStub("name.txt", true), wantedBool: true, wantedError: nil},
+		{alias: "Include extension file name", input: newFileTestStub("script.js", true), wantedBool: true, wantedError: nil},
+		{alias: "Test dir with extension on the end of file name", input: newFileTestStub("scripts.js", false), wantedBool: false, wantedError: NotProcessError},
+		{alias: "Exclude regular file name", input: newFileTestStub("file2", true), wantedBool: false, wantedError: ExcludeError},
+		{alias: "Exclude regexp file name", input: newFileTestStub("surname.txt", true), wantedBool: false, wantedError: ExcludeError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.alias, func(t *testing.T) {
+			wanted, err := filter.Check(tc.input)
+
+			assert.Equal(t, tc.wantedBool, wanted, fmt.Sprintf("Expected bool: %v, got bool: %v", tc.wantedBool, wanted))
+			assert.Equal(t, tc.wantedError, err, fmt.Sprintf("Expected error: %v, got bool: %v", tc.wantedError, err))
 		})
 	}
 }
