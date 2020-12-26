@@ -40,17 +40,12 @@ func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
 	if concurentLimit == 0 {
 		concurentLimit = 1
 	}
-	var checkPath string
-
-	if cfg.CheckPath == "" {
-		checkPath, _ = fsManager.Getwd()
-	}
 
 	walker = NewDirWalker(cfg.DryRun)
 
 	return &Shrinker{
 		verboseOutput:  cfg.VerboseOutput,
-		checkPath:      checkPath,
+		checkPath:      cfg.CheckPath,
 		filter:         NewFilter(cfg.IncludeNames, cfg.ExcludeNames, cfg.RemoveFileExt),
 		concurentLimit: concurentLimit,
 		logger:         logger,

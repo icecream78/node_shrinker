@@ -32,6 +32,14 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := log.New()
 
+		if checkPath == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				log.Fatal("Fail get current directory")
+			}
+			checkPath = cwd
+		}
+
 		if isNodeDir {
 			checkPath = path.Join(checkPath, "node_modules")
 		}
@@ -42,7 +50,7 @@ to quickly create a Cobra application.`,
 				return
 			}
 
-			logger.Info("Fail to check path existence with error: %s", err.Error())
+			logger.Infof("Fail to check path existence with error: %s", err.Error())
 			return
 		} else if !exists {
 			logger.Info("Provided non exist path. Shut down...")
