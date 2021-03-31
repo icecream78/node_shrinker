@@ -16,7 +16,7 @@ func isDirectoryExists(path string) (bool, error) {
 		return false, fmt.Errorf("Fail get stats: %v", err)
 	}
 
-	if stats.IsDir() {
+	if !stats.IsDir() {
 		return true, ProvidedFileError
 	}
 	return true, nil
