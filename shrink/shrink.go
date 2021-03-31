@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"path"
 	"sync"
 
@@ -28,10 +29,9 @@ type Shrinker struct {
 	concurentLimit int
 	checkPath      string
 	filter         *Filter
-	logger         Logger
 }
 
-func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
+func NewShrinker(cfg *Config) (*Shrinker, error) {
 	if !pathExists(cfg.CheckPath) {
 		return nil, NotExistError
 	}
@@ -48,7 +48,6 @@ func NewShrinker(cfg *Config, logger Logger) (*Shrinker, error) {
 		checkPath:      cfg.CheckPath,
 		filter:         NewFilter(cfg.IncludeNames, cfg.ExcludeNames, cfg.RemoveFileExt),
 		concurentLimit: concurentLimit,
-		logger:         logger,
 	}, nil
 }
 
@@ -88,7 +87,7 @@ func (sh *Shrinker) cleaner(ctx context.Context, done func(), removeCh chan *rem
 		select {
 		case obj := <-removeCh:
 			if sh.verboseOutput {
-				sh.logger.Infof("removing: %s\n", obj.fullpath)
+				log.Printf("removing: %s\n", obj.fullpath)
 			}
 
 			if obj.isDir {
@@ -99,14 +98,14 @@ func (sh *Shrinker) cleaner(ctx context.Context, done func(), removeCh chan *rem
 
 			if err != nil {
 				if sh.verboseOutput {
-					sh.logger.Infof("ERROR: %s\n", err)
+					log.Printf("ERROR: %s\n", err)
 				}
 				continue
 			}
 
 			if err = fsManager.RemoveAll(obj.fullpath); err != nil {
 				if sh.verboseOutput {
-					sh.logger.Infof("ERROR: %s\n", err)
+					log.Printf("ERROR: %s\n", err)
 				}
 				continue
 			}
@@ -123,9 +122,11 @@ func (sh *Shrinker) runCleaners(ctx context.Context, input chan *removeObjInfo) 
 	go func(out chan *FileStat) {
 		var wg sync.WaitGroup
 		wg.Add(sh.concurentLimit)
+
 		for i := 0; i < sh.concurentLimit; i++ {
 			go sh.cleaner(ctx, wg.Done, input, out)
 		}
+
 		wg.Wait()
 		close(out)
 	}(statsCh)
@@ -190,7 +191,7 @@ func (sh *Shrinker) fileFilterErrCallback(osPathname string, err error) ErrorAct
 	}
 
 	if sh.verboseOutput {
-		sh.logger.Infof("ERROR: %s\n", err)
+		log.Printf("ERROR: %s\n", err)
 	}
 	return SkipNode
 }
@@ -272,7 +273,7 @@ func (sh *Shrinker) layoutPrinter(checkPath string, tabPassed string, statsCh ch
 		}
 
 		logLine = fmt.Sprintf("%v%v%v (%v)\n", tabPassed, tabToAdd, printName, printFileSize)
-		sh.logger.Infoln(logLine)
+		log.Println(logLine)
 
 		if isFileInProcess {
 			statsCh <- fileStat

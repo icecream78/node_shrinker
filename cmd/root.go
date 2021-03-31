@@ -3,12 +3,12 @@ package cmd
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"path"
 
 	"github.com/dustin/go-humanize"
 	color "github.com/logrusorgru/aurora"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/icecream78/node_shrinker/fs"
 	"github.com/icecream78/node_shrinker/shrink"
@@ -30,8 +30,6 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := log.New()
-
 		if checkPath == "" {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -46,14 +44,14 @@ to quickly create a Cobra application.`,
 
 		if exists, err := isDirectoryExists(checkPath); err != nil {
 			if errors.Is(err, ProvidedFileError) {
-				logger.Info("Provided specific file, not a path to directory for clean up. Shut down...")
+				log.Println("Provided specific file, not a path to directory for clean up. Shut down...")
 				return
 			}
 
-			logger.Infof("Fail to check path existence with error: %s", err.Error())
+			log.Printf("Fail to check path existence with error: %s\n", err.Error())
 			return
 		} else if !exists {
-			logger.Info("Provided non exist path. Shut down...")
+			log.Println("Provided non exist path. Shut down...")
 			return
 		}
 
@@ -64,19 +62,19 @@ to quickly create a Cobra application.`,
 			ExcludeNames:  excludeNames,
 			IncludeNames:  includeNames,
 			RemoveFileExt: includeExtensions,
-		}, logger)
+		})
 
 		if err != nil {
 			if errors.Is(err, shrink.NotExistError) {
-				log.Infof("Path %s doesn`t exist\n", checkPath)
+				log.Printf("Path %s doesn`t exist\n", checkPath)
 				os.Exit(1)
 			}
 
-			log.Infof("Something has broken=) %v\n", err)
+			log.Printf("Something has broken=) %v\n", err)
 			os.Exit(1)
 		}
 
-		logger.Infof("Start process directory %s\n", checkPath)
+		log.Printf("Start process directory %s\n", checkPath)
 
 		ctx := context.TODO()
 
@@ -88,36 +86,31 @@ to quickly create a Cobra application.`,
 		}
 
 		if err != nil {
-			log.Infof("Something has broken2=) %v\n", err)
+			log.Printf("Something has broken2=) %v\n", err)
 			os.Exit(1)
 		}
 
 		if dryRun {
-			logger.Infoln("Dry-run stats:")
-			logger.Infof("space to release: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
-			logger.Infof("files count to remove: %d\n", color.Cyan(stats.FilesCount()))
+			log.Println("Dry-run stats:")
+			log.Printf("space to release: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
+			log.Printf("files count to remove: %d\n", color.Cyan(stats.FilesCount()))
 		} else {
-			logger.Infoln("Remove stats:")
-			logger.Infof("released space: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
-			logger.Infof("files count: %d\n", color.Cyan(stats.FilesCount()))
+			log.Println("Remove stats:")
+			log.Printf("released space: %v\n", color.Cyan(humanize.Bytes(uint64(stats.Size()))))
+			log.Printf("files count: %d\n", color.Cyan(stats.FilesCount()))
 		}
 	},
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Infoln(err)
+		log.Println(err)
 		os.Exit(1)
 	}
 }
 
 func init() {
-	log.SetFormatter(&log.TextFormatter{
-		ForceColors:            true,
-		DisableTimestamp:       true,
-		DisableLevelTruncation: true,
-	})
-	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 
 	rootCmd.PersistentFlags().StringVarP(&checkPath, "dir", "d", "", "path to directory where need cleanup")
 	rootCmd.PersistentFlags().StringSliceVarP(&excludeNames, "exclude", "e", []string{}, "list of files/directories that should not be removed. Flag can be specified multiple times. Support regular expression syntax")
