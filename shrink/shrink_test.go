@@ -11,16 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type loggerStub struct {
-}
-
-func newLoggerStub() *loggerStub {
-	return &loggerStub{}
-}
-
-func (l *loggerStub) Infof(format string, a ...interface{}) {}
-func (l *loggerStub) Infoln(a ...interface{})               {}
-
 type walkerStub struct {
 	testPathes map[string]string
 }
@@ -49,7 +39,7 @@ func TestStatGrabberFunc(t *testing.T) {
 		}, fs.NewFileStat("result", "result", 2048, 2)},
 	}
 	for _, tc := range testCases {
-		sh, err := NewShrinker(&Config{ConcurentLimit: 1, CheckPath: "/"}, newLoggerStub())
+		sh, err := NewShrinker(&Config{ConcurentLimit: 1, CheckPath: "/"})
 		if err != nil {
 			t.Errorf("Got error: %v", err)
 			continue

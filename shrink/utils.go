@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 )
 
 func sliceToMap(sl ...[]string) map[string]struct{} {
@@ -32,6 +33,12 @@ func isStringPattern(input string) bool {
 	return false
 }
 
+func isComplexExternsion(input string) bool {
+	splitted := strings.Split(input, ".")
+
+	return len(splitted) > 2
+}
+
 func devidePatternsFromRegularNames(input []string) (patterns []string, regular []string) {
 	patterns = make([]string, 0)
 	regular = make([]string, 0)
@@ -56,4 +63,25 @@ func compileRegExpList(regExpList []string) ([]*regexp.Regexp, error) {
 		regList = append(regList, cmp)
 	}
 	return regList, nil
+}
+
+func filterExtensionsList(regExpList []string) ([]*regexp.Regexp, []string) {
+	patterns := make([]*regexp.Regexp, 0)
+	regular := make([]string, 0)
+	for _, in := range regExpList {
+		isPattern := isComplexExternsion(in)
+		if isPattern {
+			fixedRegExp := fmt.Sprintf("*%s", in)
+			cmp, err := regexp.Compile(fixedRegExp)
+
+			if err != nil {
+				// TODO: say error here
+				continue
+			}
+			patterns = append(patterns, cmp)
+		} else {
+			regular = append(regular, in)
+		}
+	}
+	return patterns, regular
 }

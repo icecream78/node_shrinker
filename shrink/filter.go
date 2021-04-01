@@ -8,8 +8,10 @@ import (
 )
 
 type Filter struct {
-	includeFileNames   map[string]struct{}
-	shrunkFileExt      map[string]struct{}
+	includeFileNames map[string]struct{}
+	extFileList      map[string]struct{}
+	extRegExpList    []*regexp.Regexp
+
 	excludeNames       map[string]struct{}
 	regExpIncludeNames []*regexp.Regexp
 	regExpExcludeNames []*regexp.Regexp
@@ -19,13 +21,16 @@ func NewFilter(includeNames, excludeNames, includeExtenstions []string) *Filter 
 	patternInclude, regularInclude := devidePatternsFromRegularNames(includeNames)
 	patternExclude, regularExclude := devidePatternsFromRegularNames(excludeNames)
 
+	regExpExtensions, regularExtensions := filterExtensionsList(includeExtenstions)
+
 	// TODO: figure out how handle incoming errors
 	compiledIncludeRegList, _ := compileRegExpList(patternInclude)
 	compiledExcludeRegList, _ := compileRegExpList(patternExclude)
 
 	return &Filter{
 		includeFileNames: sliceToMap(regularInclude),
-		shrunkFileExt:    sliceToMap(includeExtenstions),
+		extFileList:      sliceToMap(regularExtensions),
+		extRegExpList:    regExpExtensions,
 
 		excludeNames:       sliceToMap(regularExclude),
 		regExpIncludeNames: compiledIncludeRegList,
@@ -95,8 +100,15 @@ func (f *Filter) isIncludeExt(name string) (exists bool) {
 		return
 	}
 
-	if _, exists = f.shrunkFileExt[ext]; exists {
+	if _, exists = f.extFileList[ext]; exists {
 		return
 	}
+
+	for _, pattern := range f.extRegExpList {
+		if matched := pattern.MatchString(name); matched {
+			return true
+		}
+	}
+
 	return
 }
