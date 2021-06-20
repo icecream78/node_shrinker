@@ -3,6 +3,7 @@ package shrink
 import (
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	. "github.com/icecream78/node_shrinker/walker"
 )
@@ -97,6 +98,10 @@ func (f *Filter) isIncludeExt(name string) (exists bool) {
 
 	if _, exists = f.shrunkFileExt[ext]; exists {
 		return
+	}
+
+	if strings.HasPrefix(ext, ".") {
+		_, exists = f.shrunkFileExt[ext[1:]]
 	}
 	return
 }
