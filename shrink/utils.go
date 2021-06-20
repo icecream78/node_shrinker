@@ -1,7 +1,7 @@
 package shrink
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"regexp"
 )
@@ -51,7 +51,9 @@ func compileRegExpList(regExpList []string) ([]*regexp.Regexp, error) {
 	for i := 0; i < len(regExpList); i++ {
 		cmp, err := regexp.Compile(regExpList[i])
 		if err != nil {
-			return nil, fmt.Errorf("Error compile regular expression: %s", regExpList[i])
+			log.Printf("Error compile regular expression: %s\n", regExpList[i])
+
+			continue
 		}
 		regList = append(regList, cmp)
 	}

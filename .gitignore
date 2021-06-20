@@ -1,6 +1,5 @@
 .vscode/
 vendor/
-mocks/
 
 *.out
 *.html
