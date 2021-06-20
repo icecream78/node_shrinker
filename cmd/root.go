@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"log"
 	"os"
@@ -22,13 +21,11 @@ var excludeNames, includeNames, includeExtensions []string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "node_shrinker",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "node_shrinker is configurable utility for shrinking node.js projects",
+	Long: `node_shrinker is configurable utility for shrinking node.js projects
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Utility was developed with CI/CD integration in mind.
+You can fully configure utility logic by various flags which are chainable or with .yml file with the same setting`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if checkPath == "" {
 			cwd, err := os.Getwd()
@@ -55,7 +52,6 @@ to quickly create a Cobra application.`,
 			return
 		}
 
-		// TODO: move Shrinker configuring with builder
 		shrinker, err := shrink.NewShrinker(&shrink.Config{
 			CheckPath:     checkPath,
 			VerboseOutput: verboseOutput,
@@ -70,13 +66,13 @@ to quickly create a Cobra application.`,
 				os.Exit(1)
 			}
 
-			log.Printf("Something has broken=) %v\n", err)
+			log.Printf("Something has broken. Error: %v\n", err)
 			os.Exit(1)
 		}
 
 		log.Printf("Start process directory %s\n", checkPath)
 
-		ctx := context.TODO()
+		ctx := cmd.Context()
 
 		var stats *fs.FileStat
 		if dryRun {
@@ -86,7 +82,7 @@ to quickly create a Cobra application.`,
 		}
 
 		if err != nil {
-			log.Printf("Something has broken2=) %v\n", err)
+			log.Printf("Fail make a job. Error: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -119,5 +115,5 @@ func init() {
 
 	rootCmd.PersistentFlags().BoolVarP(&verboseOutput, "verbose", "v", false, "more detailed output")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "display what files will be removed")
-	rootCmd.PersistentFlags().BoolVar(&isNodeDir, "node", true, "need detect node_modules dir")
+	rootCmd.PersistentFlags().BoolVar(&isNodeDir, "node", false, "need detect node_modules dir")
 }
